@@ -103,6 +103,7 @@ impl RocksDBCommon for TransactionDBInner {
     }
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
+        // FIXME
         rocksdb::TransactionDB::cf_handle(&self.0, name)
     }
 
@@ -145,6 +146,7 @@ impl RocksDBCommon for OptimisticTransactionDBInner {
     }
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
+        // FIXME
         rocksdb::OptimisticTransactionDB::cf_handle(&self.0, name)
     }
 
