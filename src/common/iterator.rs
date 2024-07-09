@@ -8,7 +8,7 @@ use crate::metrics::{SCHEMADB_ITER_BYTES, SCHEMADB_ITER_LATENCY_SECONDS};
 use crate::schema::{KeyDecoder, Schema, ValueCodec};
 use crate::{SchemaKey, SchemaValue};
 
-use super::db::RocksDBCommon;
+use super::db::CommonDBInner;
 
 /// This defines a type that can be used to seek a [`SchemaIterator`], via
 /// interfaces like [`SchemaIterator::seek`]. Mind you, not all
@@ -41,19 +41,19 @@ pub(crate) enum ScanDirection {
 
 /// DB Iterator parameterized on [`Schema`] that seeks with [`Schema::Key`] and yields
 /// [`Schema::Key`] and [`Schema::Value`] pairs.
-pub struct SchemaIterator<'a, S, R: RocksDBCommon> {
-    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R::RDB>,
+pub struct SchemaIterator<'a, S, D: rocksdb::DBAccess> {
+    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D>,
     direction: ScanDirection,
     phantom: PhantomData<S>,
 }
 
-impl<'a, S, R> SchemaIterator<'a, S, R>
+impl<'a, S, D> SchemaIterator<'a, S, D>
 where
     S: Schema,
-    R: RocksDBCommon,
+    D: rocksdb::DBAccess,
 {
     pub(crate) fn new(
-        db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R::RDB>,
+        db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D>,
         direction: ScanDirection,
     ) -> Self {
         let mut iter = SchemaIterator {
@@ -149,6 +149,7 @@ where
     }
 }
 
+#[allow(missing_docs)]
 /// The output of [`SchemaIterator`]'s next_impl
 pub struct IteratorOutput<K, V> {
     pub key: K,
@@ -156,16 +157,17 @@ pub struct IteratorOutput<K, V> {
     pub value_size_bytes: usize,
 }
 
+#[allow(missing_docs)]
 impl<K, V> IteratorOutput<K, V> {
     pub fn into_tuple(self) -> (K, V) {
         (self.key, self.value)
     }
 }
 
-impl<'a, S, R> Iterator for SchemaIterator<'a, S, R>
+impl<'a, S, D> Iterator for SchemaIterator<'a, S, D>
 where
     S: Schema,
-    R: RocksDBCommon,
+    D: rocksdb::DBAccess,
 {
     type Item = Result<IteratorOutput<S::Key, S::Value>>;
 
@@ -174,21 +176,21 @@ where
     }
 }
 
-impl<'a, S, R> FusedIterator for SchemaIterator<'a, S, R>
+impl<'a, S, D> FusedIterator for SchemaIterator<'a, S, D>
 where
     S: Schema,
-    R: RocksDBCommon,
+    D: rocksdb::DBAccess,
 {
 }
 
 /// Iterates over given column in [`rocksdb::DB`].
-pub(crate) struct RawDbIter<'a, R: RocksDBCommon> {
-    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R::RDB>,
+pub(crate) struct RawDbIter<'a, R: CommonDBInner> {
+    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R::DB>,
     direction: ScanDirection,
     upper_bound: std::ops::Bound<SchemaKey>,
 }
 
-impl<'a, R: RocksDBCommon> RawDbIter<'a, R> {
+impl<'a, R: CommonDBInner> RawDbIter<'a, R> {
     pub(crate) fn new(
         inner: &'a R,
         cf_handle: &ColumnFamily,
@@ -250,7 +252,7 @@ impl<'a, R: RocksDBCommon> RawDbIter<'a, R> {
     }
 }
 
-impl<'a, R: RocksDBCommon> Iterator for RawDbIter<'a, R> {
+impl<'a, R: CommonDBInner> Iterator for RawDbIter<'a, R> {
     type Item = (SchemaKey, SchemaValue);
 
     fn next(&mut self) -> Option<Self::Item> {
