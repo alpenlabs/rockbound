@@ -11,13 +11,17 @@ use crate::{default_write_options, is_range_bounds_inverse, Operation, SchemaKey
 use anyhow::format_err;
 pub use rocksdb;
 pub use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
-use rocksdb::{DBAccess, ReadOptions};
+use rocksdb::{DBAccess, ErrorKind, ReadOptions};
 use tracing::info;
 
 use super::iterator::RawDbIter;
 pub use crate::schema::Schema;
 use crate::schema::{ColumnFamilyName, KeyCodec, ValueCodec};
 pub use crate::schema_batch::SchemaBatch;
+
+pub type DB = CommonDB<DBInner>;
+pub type OptimisticTransactionDB = CommonDB<OptimisticTransactionDBInner>;
+pub type TransactionDB = CommonDB<TransactionDBInner>;
 
 #[allow(missing_docs)]
 pub trait RocksDBCommon {
@@ -47,8 +51,8 @@ pub trait RocksDBCommon {
     ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self::RDB>;
 }
 
-struct DB(rocksdb::DB);
-impl RocksDBCommon for DB {
+struct DBInner(rocksdb::DB);
+impl RocksDBCommon for DBInner {
     type WriteBatch = rocksdb::WriteBatch;
     type RDB = rocksdb::DB;
 
@@ -89,8 +93,8 @@ impl RocksDBCommon for DB {
     }
 }
 
-struct TransactionDB(rocksdb::TransactionDB);
-impl RocksDBCommon for TransactionDB {
+struct TransactionDBInner(rocksdb::TransactionDB);
+impl RocksDBCommon for TransactionDBInner {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
     type RDB = rocksdb::TransactionDB;
 
@@ -131,8 +135,8 @@ impl RocksDBCommon for TransactionDB {
     }
 }
 
-struct OptimisticTransactionDB(rocksdb::OptimisticTransactionDB);
-impl RocksDBCommon for OptimisticTransactionDB {
+struct OptimisticTransactionDBInner(rocksdb::OptimisticTransactionDB);
+impl RocksDBCommon for OptimisticTransactionDBInner {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
     type RDB = rocksdb::OptimisticTransactionDB;
 
@@ -310,7 +314,7 @@ impl<R: 'static + RocksDBCommon> CommonDB<R> {
     }
 }
 
-impl CommonDB<DB> {
+impl CommonDB<DBInner> {
     /// Opens a database backed by RocksDB, using the provided column family names and default
     /// column family options.
     pub fn open(
@@ -341,7 +345,7 @@ impl CommonDB<DB> {
         cfds: impl IntoIterator<Item = rocksdb::ColumnFamilyDescriptor>,
     ) -> anyhow::Result<Self> {
         let inner = rocksdb::DB::open_cf_descriptors(db_opts, path, cfds)?;
-        Ok(Self::log_construct(name, DB(inner)))
+        Ok(Self::log_construct(name, DBInner(inner)))
     }
 
     /// Open db in readonly mode. This db is completely static, so any writes that occur on the primary
@@ -355,7 +359,7 @@ impl CommonDB<DB> {
         let error_if_log_file_exists = false;
         let inner = rocksdb::DB::open_cf_for_read_only(opts, path, cfs, error_if_log_file_exists)?;
 
-        Ok(Self::log_construct(name, DB(inner)))
+        Ok(Self::log_construct(name, DBInner(inner)))
     }
 
     /// Open db in secondary mode. A secondary db is does not support writes, but can be dynamically caught up
@@ -369,7 +373,7 @@ impl CommonDB<DB> {
         cfs: Vec<ColumnFamilyName>,
     ) -> anyhow::Result<Self> {
         let inner = rocksdb::DB::open_cf_as_secondary(opts, primary_path, secondary_path, cfs)?;
-        Ok(Self::log_construct(name, DB(inner)))
+        Ok(Self::log_construct(name, DBInner(inner)))
     }
 
     /// Removes the database entries in the range `["from", "to")` using default write options.
@@ -393,7 +397,7 @@ impl CommonDB<DB> {
         &self,
         opts: ReadOptions,
         direction: ScanDirection,
-    ) -> anyhow::Result<SchemaIterator<S, DB>> {
+    ) -> anyhow::Result<SchemaIterator<S, DBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(SchemaIterator::new(
             self.inner.raw_iterator_cf_opt(cf_handle, opts),
@@ -402,7 +406,7 @@ impl CommonDB<DB> {
     }
 
     /// Returns a forward [`SchemaIterator`] on a certain schema with the default read options.
-    pub fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, DB>> {
+    pub fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, DBInner>> {
         self.iter_with_direction::<S>(Default::default(), ScanDirection::Forward)
     }
 
@@ -410,7 +414,7 @@ impl CommonDB<DB> {
     pub(crate) fn raw_iter<S: Schema>(
         &self,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<DB>> {
+    ) -> anyhow::Result<RawDbIter<DBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.inner, cf_handle, .., direction))
     }
@@ -420,7 +424,7 @@ impl CommonDB<DB> {
         &self,
         range: impl std::ops::RangeBounds<SchemaKey>,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<DB>> {
+    ) -> anyhow::Result<RawDbIter<DBInner>> {
         if is_range_bounds_inverse(&range) {
             anyhow::bail!("lower_bound > upper_bound");
         }
@@ -432,7 +436,7 @@ impl CommonDB<DB> {
     pub fn iter_with_opts<S: Schema>(
         &self,
         opts: ReadOptions,
-    ) -> anyhow::Result<SchemaIterator<S, DB>> {
+    ) -> anyhow::Result<SchemaIterator<S, DBInner>> {
         self.iter_with_direction::<S>(opts, ScanDirection::Forward)
     }
 
@@ -464,7 +468,7 @@ impl CommonDB<DB> {
     }
 }
 
-impl CommonDB<OptimisticTransactionDB> {
+impl CommonDB<OptimisticTransactionDBInner> {
     /// Opens a database backed by RocksDB, using the provided column family names and default
     /// column family options.
     pub fn open(
@@ -495,14 +499,17 @@ impl CommonDB<OptimisticTransactionDB> {
         cfds: impl IntoIterator<Item = rocksdb::ColumnFamilyDescriptor>,
     ) -> anyhow::Result<Self> {
         let inner = rocksdb::OptimisticTransactionDB::open_cf_descriptors(db_opts, path, cfds)?;
-        Ok(Self::log_construct(name, OptimisticTransactionDB(inner)))
+        Ok(Self::log_construct(
+            name,
+            OptimisticTransactionDBInner(inner),
+        ))
     }
 
     fn iter_with_direction<S: Schema>(
         &self,
         opts: ReadOptions,
         direction: ScanDirection,
-    ) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDB>> {
+    ) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(SchemaIterator::new(
             self.inner.raw_iterator_cf_opt(cf_handle, opts),
@@ -511,7 +518,9 @@ impl CommonDB<OptimisticTransactionDB> {
     }
 
     /// Returns a forward [`SchemaIterator`] on a certain schema with the default read options.
-    pub fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDB>> {
+    pub fn iter<S: Schema>(
+        &self,
+    ) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDBInner>> {
         self.iter_with_direction::<S>(Default::default(), ScanDirection::Forward)
     }
 
@@ -519,7 +528,7 @@ impl CommonDB<OptimisticTransactionDB> {
     pub(crate) fn raw_iter<S: Schema>(
         &self,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<OptimisticTransactionDB>> {
+    ) -> anyhow::Result<RawDbIter<OptimisticTransactionDBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.inner, cf_handle, .., direction))
     }
@@ -529,7 +538,7 @@ impl CommonDB<OptimisticTransactionDB> {
         &self,
         range: impl std::ops::RangeBounds<SchemaKey>,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<OptimisticTransactionDB>> {
+    ) -> anyhow::Result<RawDbIter<OptimisticTransactionDBInner>> {
         if is_range_bounds_inverse(&range) {
             anyhow::bail!("lower_bound > upper_bound");
         }
@@ -541,7 +550,7 @@ impl CommonDB<OptimisticTransactionDB> {
     pub fn iter_with_opts<S: Schema>(
         &self,
         opts: ReadOptions,
-    ) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDB>> {
+    ) -> anyhow::Result<SchemaIterator<S, OptimisticTransactionDBInner>> {
         self.iter_with_direction::<S>(opts, ScanDirection::Forward)
     }
 
@@ -571,9 +580,48 @@ impl CommonDB<OptimisticTransactionDB> {
         rocksdb::checkpoint::Checkpoint::new(&self.inner.inner())?.create_checkpoint(path)?;
         Ok(())
     }
+
+    /// takes a closure with transaction code and retries as required
+    pub fn with_optimistic_txn<Fn, Ret, RErr>(
+        &self,
+        retry: TransactionRetry,
+        mut cb: Fn,
+    ) -> Result<Ret, TransactionError<RErr>>
+    where
+        Fn: FnMut(&TransactionCtx) -> Result<Ret, RErr>,
+    {
+        let mut tries = match retry {
+            TransactionRetry::Never => 1,
+            TransactionRetry::Count(count) => count,
+        };
+
+        while tries > 0 {
+            tries -= 1;
+            let txn = self.inner.inner().transaction();
+            let ctx = TransactionCtx {
+                txn: &txn,
+                db: self,
+            };
+            let ret = match cb(&ctx) {
+                Ok(ret_val) => ret_val,
+                Err(err) => return Err(TransactionError::User(err)),
+            };
+
+            if let Err(err) = txn.commit() {
+                match err.kind() {
+                    ErrorKind::Busy | ErrorKind::TryAgain => continue,
+                    _ => return Err(TransactionError::ErrorKind(err.kind())),
+                }
+            }
+
+            return Ok(ret);
+        }
+
+        Err(TransactionError::MaxRetriesExceeded)
+    }
 }
 
-impl CommonDB<TransactionDB> {
+impl CommonDB<TransactionDBInner> {
     /// Opens a database backed by RocksDB, using the provided column family names and default
     /// column family options.
     pub fn open(
@@ -606,14 +654,14 @@ impl CommonDB<TransactionDB> {
         txn_db_opts: &rocksdb::TransactionDBOptions,
     ) -> anyhow::Result<Self> {
         let inner = rocksdb::TransactionDB::open_cf_descriptors(db_opts, txn_db_opts, path, cfds)?;
-        Ok(Self::log_construct(name, TransactionDB(inner)))
+        Ok(Self::log_construct(name, TransactionDBInner(inner)))
     }
 
     fn iter_with_direction<S: Schema>(
         &self,
         opts: ReadOptions,
         direction: ScanDirection,
-    ) -> anyhow::Result<SchemaIterator<S, TransactionDB>> {
+    ) -> anyhow::Result<SchemaIterator<S, TransactionDBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(SchemaIterator::new(
             self.inner.raw_iterator_cf_opt(cf_handle, opts),
@@ -622,7 +670,7 @@ impl CommonDB<TransactionDB> {
     }
 
     /// Returns a forward [`SchemaIterator`] on a certain schema with the default read options.
-    pub fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, TransactionDB>> {
+    pub fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, TransactionDBInner>> {
         self.iter_with_direction::<S>(Default::default(), ScanDirection::Forward)
     }
 
@@ -630,7 +678,7 @@ impl CommonDB<TransactionDB> {
     pub(crate) fn raw_iter<S: Schema>(
         &self,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<TransactionDB>> {
+    ) -> anyhow::Result<RawDbIter<TransactionDBInner>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.inner, cf_handle, .., direction))
     }
@@ -640,7 +688,7 @@ impl CommonDB<TransactionDB> {
         &self,
         range: impl std::ops::RangeBounds<SchemaKey>,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<TransactionDB>> {
+    ) -> anyhow::Result<RawDbIter<TransactionDBInner>> {
         if is_range_bounds_inverse(&range) {
             anyhow::bail!("lower_bound > upper_bound");
         }
@@ -652,7 +700,110 @@ impl CommonDB<TransactionDB> {
     pub fn iter_with_opts<S: Schema>(
         &self,
         opts: ReadOptions,
-    ) -> anyhow::Result<SchemaIterator<S, TransactionDB>> {
+    ) -> anyhow::Result<SchemaIterator<S, TransactionDBInner>> {
         self.iter_with_direction::<S>(opts, ScanDirection::Forward)
+    }
+}
+
+
+/// Instruction on
+pub enum TransactionRetry {
+    /// Only try once
+    Never,
+    /// Specify max retry count
+    Count(u16),
+}
+
+/// error return for transaction
+pub enum TransactionError<RollbackError> {
+    /// custom error specified on call
+    User(RollbackError),
+    /// max retries exceeded
+    MaxRetriesExceeded,
+    /// other rocksdb related error
+    ErrorKind(ErrorKind),
+}
+
+impl<T> Into<anyhow::Error> for TransactionError<T> where T: Into<anyhow::Error> {
+    fn into(self) -> anyhow::Error {
+        match self {
+            TransactionError::User(err) => err.into(),
+            TransactionError::MaxRetriesExceeded => anyhow::Error::msg("TransactionError: Max retries exceeded"),
+            TransactionError::ErrorKind(error_kind) => anyhow::Error::msg(match error_kind {
+                ErrorKind::NotFound => "NotFound",
+                ErrorKind::Corruption => "Corruption",
+                ErrorKind::NotSupported => "Not implemented",
+                ErrorKind::InvalidArgument => "Invalid argument",
+                ErrorKind::IOError => "IO error",
+                ErrorKind::MergeInProgress => "Merge in progress",
+                ErrorKind::Incomplete => "Result incomplete",
+                ErrorKind::ShutdownInProgress => "Shutdown in progress",
+                ErrorKind::TimedOut => "Operation timed out",
+                ErrorKind::Aborted => "Operation aborted",
+                ErrorKind::Busy => "Resource busy",
+                ErrorKind::Expired => "Operation expired",
+                ErrorKind::TryAgain => "Operation failed. Try again.",
+                ErrorKind::CompactionTooLarge => "Compaction too large",
+                ErrorKind::ColumnFamilyDropped => "Column family dropped",
+                ErrorKind::Unknown => "Unknown",
+            }),
+        }
+    }
+}
+
+/// operations inside transaction
+pub struct TransactionCtx<'db> {
+    txn: &'db rocksdb::Transaction<'db, rocksdb::OptimisticTransactionDB>,
+    db: &'db OptimisticTransactionDB,
+}
+
+impl<'db> TransactionCtx<'db> {
+    /// Reads single record by key.
+    pub fn get<S: Schema>(
+        &self,
+        schema_key: &impl KeyCodec<S>,
+    ) -> anyhow::Result<Option<S::Value>> {
+        let _timer = SCHEMADB_GET_LATENCY_SECONDS
+            .with_label_values(&[S::COLUMN_FAMILY_NAME])
+            .start_timer();
+
+        let k = schema_key.encode_key()?;
+        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+
+        let result = self.txn.get_pinned_cf(cf_handle, k)?;
+        SCHEMADB_GET_BYTES
+            .with_label_values(&[S::COLUMN_FAMILY_NAME])
+            .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));
+
+        result
+            .map(|raw_value| <S::Value as ValueCodec<S>>::decode_value(&raw_value))
+            .transpose()
+            .map_err(|err| err.into())
+    }
+
+    /// Writes single record.
+    pub fn put<S: Schema>(
+        &self,
+        key: &impl KeyCodec<S>,
+        value: &impl ValueCodec<S>,
+    ) -> anyhow::Result<()> {
+        // Not necessary to use a batch, but we'd like a central place to bump counters.
+        // Used in tests only anyway.
+        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+        self.txn
+            .put_cf(cf_handle, key.encode_key()?, value.encode_value()?)?;
+
+        Ok(())
+    }
+
+    /// Delete a single key from the database.
+    pub fn delete<S: Schema>(&self, key: &impl KeyCodec<S>) -> anyhow::Result<()> {
+        // Not necessary to use a batch, but we'd like a central place to bump counters.
+        // Used in tests only anyway.
+        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+
+        self.txn.delete_cf(cf_handle, key.encode_key()?)?;
+
+        Ok(())
     }
 }
