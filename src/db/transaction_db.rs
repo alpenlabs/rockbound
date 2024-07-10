@@ -4,19 +4,12 @@ use tracing::info;
 
 use super::{CommonDB, RocksDB};
 
-
 #[allow(missing_docs)]
-pub struct TransactionDBWrap(rocksdb::TransactionDB);
-impl RocksDB for TransactionDBWrap {
+impl RocksDB for rocksdb::TransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
-    type DB = rocksdb::TransactionDB;
-
-    fn db(&self) -> &Self::DB {
-        &self.0
-    }
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
-        <rocksdb::TransactionDB>::cf_handle(&self.0, name)
+        <rocksdb::TransactionDB>::cf_handle(&self, name)
     }
 
     fn get_pinned_cf<K: AsRef<[u8]>>(
@@ -24,7 +17,7 @@ impl RocksDB for TransactionDBWrap {
         cf: &impl rocksdb::AsColumnFamilyRef,
         key: K,
     ) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
-        rocksdb::TransactionDB::get_pinned_cf(&self.0, cf, key)
+        rocksdb::TransactionDB::get_pinned_cf(&self, cf, key)
     }
 
     fn write_opt(
@@ -32,33 +25,29 @@ impl RocksDB for TransactionDBWrap {
         batch: Self::WriteBatch,
         writeopts: &rocksdb::WriteOptions,
     ) -> Result<(), rocksdb::Error> {
-        rocksdb::TransactionDB::write_opt(&self.0, batch, writeopts)
+        rocksdb::TransactionDB::write_opt(&self, batch, writeopts)
     }
 
     fn raw_iterator_cf_opt<'a: 'b, 'b>(
         &'a self,
         cf_handle: &impl rocksdb::AsColumnFamilyRef,
         readopts: rocksdb::ReadOptions,
-    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self::DB> {
-        rocksdb::TransactionDB::raw_iterator_cf_opt(&self.0, cf_handle, readopts)
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self> {
+        rocksdb::TransactionDB::raw_iterator_cf_opt(&self, cf_handle, readopts)
     }
 }
 
 #[allow(missing_docs)]
 pub struct TransactionDB {
     name: &'static str,
-    inner: TransactionDBWrap,
+    db: rocksdb::TransactionDB,
 }
 
 impl CommonDB for TransactionDB {
-    type Inner = TransactionDBWrap;
+    type DB = rocksdb::TransactionDB;
 
-    fn inner(&self) -> &Self::Inner {
-        &self.inner
-    }
-
-    fn db(&self) -> &<Self::Inner as RocksDB>::DB {
-        &self.inner.db()
+    fn db(&self) -> &Self::DB {
+        &self.db
     }
 
     fn name(&self) -> &str {
@@ -67,9 +56,9 @@ impl CommonDB for TransactionDB {
 }
 
 impl TransactionDB {
-    fn log_construct(name: &'static str, inner: TransactionDBWrap) -> Self {
+    fn log_construct(name: &'static str, db: rocksdb::TransactionDB) -> Self {
         info!(rocksdb_name = name, "Opened RocksDB");
-        Self { name, inner }
+        Self { name, db }
     }
 
     /// Opens a database backed by RocksDB, using the provided column family names and default
@@ -107,6 +96,6 @@ impl TransactionDB {
         txn_db_opts: &rocksdb::TransactionDBOptions,
     ) -> anyhow::Result<Self> {
         let db = rocksdb::TransactionDB::open_cf_descriptors(db_opts, txn_db_opts, path, cfds)?;
-        Ok(Self::log_construct(name, TransactionDBWrap(db)))
+        Ok(Self::log_construct(name, db))
     }
 }

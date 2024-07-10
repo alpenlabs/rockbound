@@ -226,22 +226,22 @@ impl<DB: CommonDB> CacheContainer<DB> {
 
 /// [`Iterator`] over keys in given [`Schema`] in all snapshots in reverse
 /// lexicographical order.
-pub(crate) struct CacheContainerIter<'a, SnapshotIter, DB: CommonDB>
+pub(crate) struct CacheContainerIter<'a, SnapshotIter, D: CommonDB>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
-    db_iter: Peekable<RawDbIter<'a, DB::Inner>>,
+    db_iter: Peekable<RawDbIter<'a, D::DB>>,
     snapshot_iterators: Vec<Peekable<SnapshotIter>>,
     next_value_locations: Vec<DataLocation>,
     direction: ScanDirection,
 }
 
-impl<'a, SnapshotIter, DB: CommonDB> CacheContainerIter<'a, SnapshotIter, DB>
+impl<'a, SnapshotIter, D: CommonDB> CacheContainerIter<'a, SnapshotIter, D>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
     fn new(
-        db_iter: RawDbIter<'a, DB::Inner>,
+        db_iter: RawDbIter<'a, D::DB>,
         snapshot_iterators: Vec<SnapshotIter>,
         direction: ScanDirection,
     ) -> Self {

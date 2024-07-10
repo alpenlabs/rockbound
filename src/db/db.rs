@@ -10,18 +10,11 @@ use crate::schema::Schema;
 use super::{CommonDB, RocksDB};
 
 #[allow(missing_docs)]
-#[derive(Debug)]
-pub struct DBWrap(rocksdb::DB);
-impl RocksDB for DBWrap {
+impl RocksDB for rocksdb::DB {
     type WriteBatch = rocksdb::WriteBatch;
-    type DB = rocksdb::DB;
-
-    fn db(&self) -> &Self::DB {
-        &self.0
-    }
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
-        rocksdb::DB::cf_handle(&self.0, name)
+        rocksdb::DB::cf_handle(&self, name)
     }
 
     fn get_pinned_cf<K: AsRef<[u8]>>(
@@ -29,7 +22,7 @@ impl RocksDB for DBWrap {
         cf: &impl rocksdb::AsColumnFamilyRef,
         key: K,
     ) -> Result<Option<rocksdb::DBPinnableSlice>, rocksdb::Error> {
-        rocksdb::DB::get_pinned_cf(&self.0, cf, key)
+        rocksdb::DB::get_pinned_cf(&self, cf, key)
     }
 
     fn write_opt(
@@ -37,15 +30,15 @@ impl RocksDB for DBWrap {
         batch: Self::WriteBatch,
         writeopts: &rocksdb::WriteOptions,
     ) -> Result<(), rocksdb::Error> {
-        rocksdb::DB::write_opt(&self.0, batch, writeopts)
+        rocksdb::DB::write_opt(&self, batch, writeopts)
     }
 
     fn raw_iterator_cf_opt<'a: 'b, 'b>(
         &'a self,
         cf_handle: &impl rocksdb::AsColumnFamilyRef,
         readopts: rocksdb::ReadOptions,
-    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self::DB> {
-        rocksdb::DB::raw_iterator_cf_opt(&self.0, cf_handle, readopts)
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self> {
+        rocksdb::DB::raw_iterator_cf_opt(&self, cf_handle, readopts)
     }
 }
 
@@ -53,19 +46,14 @@ impl RocksDB for DBWrap {
 #[derive(Debug)]
 pub struct DB {
     name: &'static str,
-    inner: DBWrap,
+    db: rocksdb::DB,
 }
 
 impl CommonDB for DB {
-    // type DB = rocksdb::DB;
-    type Inner = DBWrap;
+    type DB = rocksdb::DB;
 
-    fn inner(&self) -> &Self::Inner {
-        &self.inner
-    }
-
-    fn db(&self) -> &<Self::Inner as RocksDB>::DB {
-        &self.inner.db()
+    fn db(&self) -> &Self::DB {
+        &self.db
     }
 
     fn name(&self) -> &str {
@@ -74,9 +62,9 @@ impl CommonDB for DB {
 }
 
 impl DB {
-    fn log_construct(name: &'static str, db: DBWrap) -> Self {
+    fn log_construct(name: &'static str, db: rocksdb::DB) -> Self {
         info!(rocksdb_name = name, "Opened RocksDB");
-        Self { name, inner: db }
+        Self { name, db }
     }
 
     /// Opens a database backed by RocksDB, using the provided column family names and default
@@ -109,7 +97,7 @@ impl DB {
         cfds: impl IntoIterator<Item = rocksdb::ColumnFamilyDescriptor>,
     ) -> anyhow::Result<Self> {
         let db = rocksdb::DB::open_cf_descriptors(db_opts, path, cfds)?;
-        Ok(Self::log_construct(name, DBWrap(db)))
+        Ok(Self::log_construct(name, db))
     }
 
     /// Open db in readonly mode. This db is completely static, so any writes that occur on the primary
@@ -123,7 +111,7 @@ impl DB {
         let error_if_log_file_exists = false;
         let db = rocksdb::DB::open_cf_for_read_only(opts, path, cfs, error_if_log_file_exists)?;
 
-        Ok(Self::log_construct(name, DBWrap(db)))
+        Ok(Self::log_construct(name, db))
     }
 
     /// Open db in secondary mode. A secondary db is does not support writes, but can be dynamically caught up
@@ -137,7 +125,7 @@ impl DB {
         cfs: Vec<ColumnFamilyName>,
     ) -> anyhow::Result<Self> {
         let db = rocksdb::DB::open_cf_as_secondary(opts, primary_path, secondary_path, cfs)?;
-        Ok(Self::log_construct(name, DBWrap(db)))
+        Ok(Self::log_construct(name, db))
     }
 
     /// Removes the database entries in the range `["from", "to")` using default write options.
@@ -153,7 +141,7 @@ impl DB {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         let from = from.encode_seek_key()?;
         let to = to.encode_seek_key()?;
-        self.inner.db().delete_range_cf(cf_handle, from, to)?;
+        self.db().delete_range_cf(cf_handle, from, to)?;
         Ok(())
     }
 

@@ -20,11 +20,8 @@ use crate::{default_write_options, is_range_bounds_inverse, Operation, Schema, S
 use super::iterator::{RawDbIter, ScanDirection};
 
 #[allow(missing_docs)]
-pub trait RocksDB {
+pub trait RocksDB: rocksdb::DBAccess + Sized {
     type WriteBatch: WriteBatch;
-    type DB: rocksdb::DBAccess;
-
-    fn db(&self) -> &Self::DB;
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily>;
     fn get_pinned_cf<K: AsRef<[u8]>>(
@@ -42,21 +39,19 @@ pub trait RocksDB {
         &'a self,
         cf_handle: &impl rocksdb::AsColumnFamilyRef,
         readopts: rocksdb::ReadOptions,
-    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self::DB>;
+    ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self>;
 }
 
 #[allow(missing_docs)]
 pub trait CommonDB: Sized {
-    type Inner: RocksDB;
+    type DB: RocksDB;
 
-    fn inner(&self) -> &Self::Inner;
-
-    fn db(&self) -> &<Self::Inner as RocksDB>::DB;
+    fn db(&self) -> &Self::DB;
 
     fn name(&self) -> &str;
 
     fn get_cf_handle(&self, cf_name: &str) -> anyhow::Result<&rocksdb::ColumnFamily> {
-        self.inner().cf_handle(cf_name).ok_or_else(|| {
+        self.db().cf_handle(cf_name).ok_or_else(|| {
             format_err!(
                 "DB::cf_handle not found for column family name: {}",
                 cf_name
@@ -73,7 +68,7 @@ pub trait CommonDB: Sized {
         let k = schema_key.encode_key()?;
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
 
-        let result = self.inner().get_pinned_cf(cf_handle, k)?;
+        let result = self.db().get_pinned_cf(cf_handle, k)?;
         SCHEMADB_GET_BYTES
             .with_label_values(&[S::COLUMN_FAMILY_NAME])
             .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));
@@ -111,7 +106,7 @@ pub trait CommonDB: Sized {
         let _timer = SCHEMADB_BATCH_COMMIT_LATENCY_SECONDS
             .with_label_values(&[self.name()])
             .start_timer();
-        let mut db_batch = <<Self as CommonDB>::Inner as RocksDB>::WriteBatch::default();
+        let mut db_batch = <<Self as CommonDB>::DB as RocksDB>::WriteBatch::default();
         for (cf_name, rows) in batch.last_writes.iter() {
             let cf_handle = self.get_cf_handle(cf_name)?;
             for (key, operation) in rows {
@@ -123,7 +118,7 @@ pub trait CommonDB: Sized {
         }
         let serialized_size = db_batch.size_in_bytes();
 
-        self.inner().write_opt(db_batch, &default_write_options())?;
+        self.db().write_opt(db_batch, &default_write_options())?;
 
         // Bump counters only after DB write succeeds.
         for (cf_name, rows) in batch.last_writes.iter() {
@@ -155,7 +150,7 @@ pub trait CommonDB: Sized {
     ) -> anyhow::Result<SchemaIterator<S, Self>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(SchemaIterator::new(
-            self.inner().raw_iterator_cf_opt(cf_handle, opts),
+            self.db().raw_iterator_cf_opt(cf_handle, opts),
             direction,
         ))
     }
@@ -170,9 +165,9 @@ pub trait CommonDB: Sized {
     fn raw_iter<S: Schema>(
         &self,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<Self::Inner>> {
+    ) -> anyhow::Result<RawDbIter<Self::DB>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
-        Ok(RawDbIter::new(&self.inner(), cf_handle, .., direction))
+        Ok(RawDbIter::new(&self.db(), cf_handle, .., direction))
     }
 
     /// TODO: pub(crate)
@@ -181,12 +176,12 @@ pub trait CommonDB: Sized {
         &self,
         range: impl std::ops::RangeBounds<SchemaKey>,
         direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<Self::Inner>> {
+    ) -> anyhow::Result<RawDbIter<Self::DB>> {
         if is_range_bounds_inverse(&range) {
             anyhow::bail!("lower_bound > upper_bound");
         }
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
-        Ok(RawDbIter::new(&self.inner(), cf_handle, range, direction))
+        Ok(RawDbIter::new(&self.db(), cf_handle, range, direction))
     }
 
     /// Returns a forward [`SchemaIterator`] on a certain schema with the provided read options.

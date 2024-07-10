@@ -42,7 +42,7 @@ pub(crate) enum ScanDirection {
 /// DB Iterator parameterized on [`Schema`] that seeks with [`Schema::Key`] and yields
 /// [`Schema::Key`] and [`Schema::Value`] pairs.
 pub struct SchemaIterator<'a, S, D: CommonDB> {
-    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, <D::Inner as RocksDB>::DB>,
+    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D::DB>,
     direction: ScanDirection,
     phantom: PhantomData<S>,
 }
@@ -53,7 +53,7 @@ where
     D: CommonDB,
 {
     pub(crate) fn new(
-        db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, <D::Inner as RocksDB>::DB>,
+        db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D::DB>,
         direction: ScanDirection,
     ) -> Self {
         let mut iter = SchemaIterator {
@@ -185,7 +185,7 @@ where
 
 /// Iterates over given column in [`rocksdb::DB`].
 pub(crate) struct RawDbIter<'a, R: RocksDB> {
-    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R::DB>,
+    db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R>,
     direction: ScanDirection,
     upper_bound: std::ops::Bound<SchemaKey>,
 }
@@ -336,7 +336,7 @@ mod tests {
             assert_eq!(0, count_backward);
         }
 
-        fn collect_actual_values(iter: RawDbIter<<DB as CommonDB>::Inner>) -> Vec<(u32, u32)> {
+        fn collect_actual_values(iter: RawDbIter<<DB as CommonDB>::DB>) -> Vec<(u32, u32)> {
             iter.map(|(key, value)| {
                 let key = <<S as Schema>::Key as KeyDecoder<S>>::decode_key(&key).unwrap();
                 let value = <<S as Schema>::Value as ValueCodec<S>>::decode_value(&value).unwrap();
