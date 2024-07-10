@@ -4,7 +4,6 @@ use tracing::info;
 
 use super::{CommonDB, RocksDB};
 
-#[allow(missing_docs)]
 impl RocksDB for rocksdb::TransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
 
@@ -37,7 +36,8 @@ impl RocksDB for rocksdb::TransactionDB {
     }
 }
 
-#[allow(missing_docs)]
+/// This DB is a schematized RocksDB wrapper where all data passed in and out are typed according to
+/// [`Schema`]s.
 pub struct TransactionDB {
     name: &'static str,
     db: rocksdb::TransactionDB,

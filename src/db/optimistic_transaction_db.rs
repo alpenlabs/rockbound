@@ -8,7 +8,6 @@ use crate::schema::{KeyCodec, Schema, ValueCodec};
 
 use super::{CommonDB, RocksDB};
 
-#[allow(missing_docs)]
 impl RocksDB for rocksdb::OptimisticTransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
 
@@ -41,8 +40,9 @@ impl RocksDB for rocksdb::OptimisticTransactionDB {
     }
 }
 
+/// This DB is a schematized RocksDB wrapper where all data passed in and out are typed according to
+/// [`Schema`]s.
 #[derive(Debug)]
-#[allow(missing_docs)]
 pub struct OptimisticTransactionDB {
     name: &'static str,
     db: rocksdb::OptimisticTransactionDB,

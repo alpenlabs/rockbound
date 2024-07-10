@@ -148,7 +148,6 @@ where
     }
 }
 
-#[allow(missing_docs)]
 /// The output of [`SchemaIterator`]'s next_impl
 pub struct IteratorOutput<K, V> {
     pub key: K,
@@ -156,7 +155,6 @@ pub struct IteratorOutput<K, V> {
     pub value_size_bytes: usize,
 }
 
-#[allow(missing_docs)]
 impl<K, V> IteratorOutput<K, V> {
     pub fn into_tuple(self) -> (K, V) {
         (self.key, self.value)

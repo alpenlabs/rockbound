@@ -9,7 +9,6 @@ use crate::schema::Schema;
 
 use super::{CommonDB, RocksDB};
 
-#[allow(missing_docs)]
 impl RocksDB for rocksdb::DB {
     type WriteBatch = rocksdb::WriteBatch;
 
@@ -42,7 +41,8 @@ impl RocksDB for rocksdb::DB {
     }
 }
 
-#[allow(missing_docs)]
+/// This DB is a schematized RocksDB wrapper where all data passed in and out are typed according to
+/// [`Schema`]s.
 #[derive(Debug)]
 pub struct DB {
     name: &'static str,

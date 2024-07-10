@@ -22,7 +22,6 @@ use crate::{
 
 use super::iterator::{RawDbIter, ScanDirection};
 
-#[allow(missing_docs)]
 pub trait RocksDB: rocksdb::DBAccess + Sized {
     type WriteBatch: WriteBatch;
 
@@ -45,14 +44,18 @@ pub trait RocksDB: rocksdb::DBAccess + Sized {
     ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self>;
 }
 
-#[allow(missing_docs)]
+/// Common implemnentation for RocksDB
 pub trait CommonDB: Sized {
+    /// RocksDB: rocksdb::DB | rocksdb::OptimisticTransactionDB | rocksdb::TransactionDB
     type DB: RocksDB;
 
+    /// Get reference to rocksdb
     fn db(&self) -> &Self::DB;
 
+    /// Db name
     fn name(&self) -> &str;
 
+    /// (internal) Get ColumnFamily handle for `cf_name``
     fn get_cf_handle(&self, cf_name: &str) -> anyhow::Result<&rocksdb::ColumnFamily> {
         self.db().cf_handle(cf_name).ok_or_else(|| {
             format_err!(
@@ -180,7 +183,6 @@ pub trait CommonDB: Sized {
     }
 }
 
-#[allow(missing_docs)]
 pub trait WriteBatch: Default {
     fn put_cf<K, V>(&mut self, cf: &impl rocksdb::AsColumnFamilyRef, key: K, value: V)
     where
