@@ -8,15 +8,14 @@ use crate::cache::SnapshotId;
 use crate::iterator::ScanDirection;
 use crate::schema::KeyDecoder;
 use crate::{
-    KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue, SeekKeyEncoder,
-    ValueCodec,
+    CommonDB, KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue, SeekKeyEncoder, ValueCodec
 };
 
 /// Cache layer that stores all writes locally and also able to access "previous" operations.
 #[derive(Debug)]
-pub struct CacheDb {
+pub struct CacheDb<DB: CommonDB> {
     local_cache: Mutex<ChangeSet>,
-    db: ReadOnlyLock<CacheContainer>,
+    db: ReadOnlyLock<CacheContainer<DB>>,
 }
 
 /// Response for a paginated query which also includes the "next" key to pass
@@ -29,9 +28,9 @@ pub struct PaginatedResponse<S: Schema> {
     pub next: Option<S::Key>,
 }
 
-impl CacheDb {
+impl<DB: CommonDB> CacheDb<DB> {
     /// Create new [`CacheDb`] pointing to given [`CacheContainer`]
-    pub fn new(id: SnapshotId, cache_container: ReadOnlyLock<CacheContainer>) -> Self {
+    pub fn new(id: SnapshotId, cache_container: ReadOnlyLock<CacheContainer<DB>>) -> Self {
         Self {
             local_cache: Mutex::new(ChangeSet::new(id)),
             db: cache_container,
@@ -71,7 +70,7 @@ impl CacheDb {
     }
 
     /// Overwrites inner cache with new, while retaining reference to parent
-    pub fn overwrite_change_set(&self, other: CacheDb) {
+    pub fn overwrite_change_set(&self, other: CacheDb<DB>) {
         let mut this_cache = self.local_cache.lock().unwrap();
         let other_cache = other.local_cache.into_inner().unwrap();
         *this_cache = other_cache;
@@ -307,8 +306,8 @@ where
     }
 }
 
-impl From<CacheDb> for ChangeSet {
-    fn from(value: CacheDb) -> Self {
+impl<DB: CommonDB> From<CacheDb<DB>> for ChangeSet {
+    fn from(value: CacheDb<DB>) -> Self {
         value
             .local_cache
             .into_inner()
@@ -488,13 +487,13 @@ mod tests {
         assert_eq!(expected_values, actual_values);
     }
 
-    fn put_value(cache_db: &CacheDb, key: u32, value: u32) {
+    fn put_value(cache_db: &CacheDb<DB>, key: u32, value: u32) {
         cache_db
             .put::<TestSchema>(&TestCompositeField(key, 0, 0), &TestField(value))
             .unwrap();
     }
 
-    fn check_value(cache_db: &CacheDb, key: u32, expected_value: Option<u32>) {
+    fn check_value(cache_db: &CacheDb<DB>, key: u32, expected_value: Option<u32>) {
         let actual_value = cache_db
             .read::<TestSchema>(&TestCompositeField(key, 0, 0))
             .unwrap()

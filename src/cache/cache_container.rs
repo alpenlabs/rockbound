@@ -3,12 +3,13 @@ use std::cmp::Ordering;
 use std::collections::{btree_map, HashMap};
 use std::iter::{Peekable, Rev};
 
-use crate::cache::cache_container::DataLocation::Snapshot;
+// use crate::cache::cache_container::DataLocation::Snapshot;
 use crate::cache::change_set::ChangeSet;
 use crate::cache::SnapshotId;
-use crate::iterator::ScanDirection;
+use crate::iterator::{ScanDirection, RawDbIter};
 use crate::schema::{KeyCodec, ValueCodec};
-use crate::{Operation, RawDbIter, ReadOnlyLock, Schema, SchemaKey, SchemaValue, DB};
+use crate::{Operation, ReadOnlyLock, Schema, SchemaKey, SchemaValue};
+use crate::db::CommonDB;
 
 /// Holds collection of [`ChangeSet`]'s associated with particular Snapshot
 /// and knows how to traverse them.
@@ -16,7 +17,7 @@ use crate::{Operation, RawDbIter, ReadOnlyLock, Schema, SchemaKey, SchemaValue, 
 /// Should be managed carefully, because discrepancy between `snapshots` and `to_parent` leads to panic
 /// Ideally owner of writable reference to parent nad owner of cache container manages both correctly.
 #[derive(Debug)]
-pub struct CacheContainer {
+pub struct CacheContainer<DB: CommonDB> {
     db: DB,
     /// Set of [`ChangeSet`]s of data per individual database per snapshot
     snapshots: HashMap<SnapshotId, ChangeSet>,
@@ -25,7 +26,7 @@ pub struct CacheContainer {
     to_parent: ReadOnlyLock<HashMap<SnapshotId, SnapshotId>>,
 }
 
-impl CacheContainer {
+impl<DB: CommonDB> CacheContainer<DB> {
     /// Create CacheContainer pointing go given DB and Snapshot ID relations
     pub fn new(db: DB, to_parent: ReadOnlyLock<HashMap<SnapshotId, SnapshotId>>) -> Self {
         Self {
@@ -135,7 +136,7 @@ impl CacheContainer {
     pub(crate) fn iter<S: Schema>(
         &self,
         snapshot_id: SnapshotId,
-    ) -> anyhow::Result<CacheContainerIter<btree_map::Iter<SchemaKey, Operation>>> {
+    ) -> anyhow::Result<CacheContainerIter<btree_map::Iter<SchemaKey, Operation>, DB>> {
         let snapshot_iterators = self.snapshot_iterators::<S>(snapshot_id);
         let db_iter = self.db.raw_iter::<S>(ScanDirection::Forward)?;
 
@@ -150,7 +151,7 @@ impl CacheContainer {
     pub(crate) fn rev_iter<S: Schema>(
         &self,
         snapshot_id: SnapshotId,
-    ) -> anyhow::Result<CacheContainerIter<Rev<btree_map::Iter<SchemaKey, Operation>>>> {
+    ) -> anyhow::Result<CacheContainerIter<Rev<btree_map::Iter<SchemaKey, Operation>>, DB>> {
         let snapshot_iterators = self
             .snapshot_iterators::<S>(snapshot_id)
             .into_iter()
@@ -169,7 +170,7 @@ impl CacheContainer {
         &self,
         mut snapshot_id: SnapshotId,
         range: impl std::ops::RangeBounds<SchemaKey> + Clone,
-    ) -> anyhow::Result<CacheContainerIter<btree_map::Range<SchemaKey, Operation>>> {
+    ) -> anyhow::Result<CacheContainerIter<btree_map::Range<SchemaKey, Operation>, DB>> {
         let mut snapshot_iterators = vec![];
         let to_parent = self.to_parent.read().unwrap();
         while let Some(parent_snapshot_id) = to_parent.get(&snapshot_id) {
@@ -197,7 +198,7 @@ impl CacheContainer {
         &self,
         mut snapshot_id: SnapshotId,
         range: impl std::ops::RangeBounds<SchemaKey> + Clone,
-    ) -> anyhow::Result<CacheContainerIter<Rev<btree_map::Range<SchemaKey, Operation>>>> {
+    ) -> anyhow::Result<CacheContainerIter<Rev<btree_map::Range<SchemaKey, Operation>>, DB>> {
         let mut snapshot_iterators = vec![];
         let to_parent = self.to_parent.read().unwrap();
         while let Some(parent_snapshot_id) = to_parent.get(&snapshot_id) {
@@ -225,22 +226,22 @@ impl CacheContainer {
 
 /// [`Iterator`] over keys in given [`Schema`] in all snapshots in reverse
 /// lexicographical order.
-pub(crate) struct CacheContainerIter<'a, SnapshotIter>
+pub(crate) struct CacheContainerIter<'a, SnapshotIter, DB: CommonDB>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
-    db_iter: Peekable<RawDbIter<'a>>,
+    db_iter: Peekable<RawDbIter<'a, DB::Inner>>,
     snapshot_iterators: Vec<Peekable<SnapshotIter>>,
     next_value_locations: Vec<DataLocation>,
     direction: ScanDirection,
 }
 
-impl<'a, SnapshotIter> CacheContainerIter<'a, SnapshotIter>
+impl<'a, SnapshotIter, DB: CommonDB> CacheContainerIter<'a, SnapshotIter, DB>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
     fn new(
-        db_iter: RawDbIter<'a>,
+        db_iter: RawDbIter<'a, DB::Inner>,
         snapshot_iterators: Vec<SnapshotIter>,
         direction: ScanDirection,
     ) -> Self {
@@ -264,7 +265,9 @@ enum DataLocation {
     Snapshot(usize),
 }
 
-impl<'a, SnapshotIter> Iterator for CacheContainerIter<'a, SnapshotIter>
+use DataLocation::Snapshot;
+
+impl<'a, SnapshotIter, DB: CommonDB> Iterator for CacheContainerIter<'a, SnapshotIter, DB>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
@@ -353,7 +356,7 @@ mod tests {
     use crate::iterator::ScanDirection;
     use crate::schema::{KeyDecoder, KeyEncoder, Schema, ValueCodec};
     use crate::test::TestField;
-    use crate::{define_schema, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
+    use crate::{define_schema, Operation, SchemaBatch, SchemaKey, SchemaValue, CommonDB, DB};
 
     const DUMMY_STATE_CF: &str = "DummyStateCF";
 
@@ -625,7 +628,7 @@ mod tests {
     }
 
     fn collect_actual_values<'a, I: Iterator<Item = (&'a SchemaKey, &'a Operation)>>(
-        iterator: CacheContainerIter<'a, I>,
+        iterator: CacheContainerIter<'a, I, DB>,
     ) -> Vec<(TestField, TestField)> {
         iterator
             .into_iter()
@@ -936,7 +939,7 @@ mod tests {
     }
 
     fn check_range<R: std::ops::RangeBounds<SchemaKey> + Clone>(
-        cache_container: RwLockReadGuard<CacheContainer>,
+        cache_container: RwLockReadGuard<CacheContainer<DB>>,
         range: R,
     ) {
         let iterator_forward = cache_container.iter_range::<S>(10, range.clone()).unwrap();

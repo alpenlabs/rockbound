@@ -9,7 +9,7 @@ use rockbound::cache::cache_db::CacheDb;
 use rockbound::schema::{KeyDecoder, KeyEncoder, ValueCodec};
 use rockbound::test::{KeyPrefix1, KeyPrefix2, TestCompositeField, TestField};
 use rockbound::{
-    define_schema, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaIterator, SeekKeyEncoder, DB,
+    define_schema, CommonDB, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaIterator, SeekKeyEncoder, DB
 };
 use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 use tempfile::TempDir;
@@ -18,7 +18,7 @@ define_schema!(TestSchema, TestCompositeField, TestField, "TestCF");
 
 type S = TestSchema;
 
-fn collect_values(iter: SchemaIterator<S>) -> Vec<u32> {
+fn collect_values(iter: SchemaIterator<S, DB>) -> Vec<u32> {
     iter.map(|row| row.unwrap().value.0).collect()
 }
 
@@ -77,11 +77,11 @@ impl TestDB {
 }
 
 impl TestDB {
-    fn iter(&self) -> SchemaIterator<S> {
+    fn iter(&self) -> SchemaIterator<S, DB> {
         self.db.iter().expect("Failed to create iterator.")
     }
 
-    fn rev_iter(&self) -> SchemaIterator<S> {
+    fn rev_iter(&self) -> SchemaIterator<S, DB> {
         self.db.iter().expect("Failed to create iterator.").rev()
     }
 }
