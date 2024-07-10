@@ -32,26 +32,26 @@ fn open_db(dir: impl AsRef<Path>) -> DB {
     DB::open(dir, "test", get_column_families(), &db_opts).expect("Failed to open DB.")
 }
 
-// fn open_db_read_only(dir: &TempDir) -> DB {
-//     DB::open_cf_readonly(
-//         &rocksdb::Options::default(),
-//         dir.path(),
-//         "test",
-//         get_column_families(),
-//     )
-//     .expect("Failed to open DB.")
-// }
+fn open_db_read_only(dir: &TempDir) -> DB {
+    DB::open_cf_readonly(
+        &rocksdb::Options::default(),
+        dir.path(),
+        "test",
+        get_column_families(),
+    )
+    .expect("Failed to open DB.")
+}
 
-// fn open_db_as_secondary(dir: &TempDir, dir_sec: &TempDir) -> DB {
-//     DB::open_cf_as_secondary(
-//         &rocksdb::Options::default(),
-//         &dir.path(),
-//         &dir_sec.path(),
-//         "test",
-//         get_column_families(),
-//     )
-//     .expect("Failed to open DB.")
-// }
+fn open_db_as_secondary(dir: &TempDir, dir_sec: &TempDir) -> DB {
+    DB::open_cf_as_secondary(
+        &rocksdb::Options::default(),
+        &dir.path(),
+        &dir_sec.path(),
+        "test",
+        get_column_families(),
+    )
+    .expect("Failed to open DB.")
+}
 
 struct TestDB {
     _tmpdir: TempDir,
@@ -249,100 +249,100 @@ fn test_reopen() {
     }
 }
 
-// #[test]
-// fn test_open_read_only() {
-//     let tmpdir = tempfile::tempdir().unwrap();
-//     {
-//         let db = open_db(&tmpdir);
-//         db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
-//     }
-//     {
-//         let db = open_db_read_only(&tmpdir);
-//         assert_eq!(
-//             db.get::<TestSchema1>(&TestField(0)).unwrap(),
-//             Some(TestField(0)),
-//         );
-//         assert!(db.put::<TestSchema1>(&TestField(1), &TestField(1)).is_err());
-//     }
-// }
+#[test]
+fn test_open_read_only() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    {
+        let db = open_db(&tmpdir);
+        db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
+    }
+    {
+        let db = open_db_read_only(&tmpdir);
+        assert_eq!(
+            db.get::<TestSchema1>(&TestField(0)).unwrap(),
+            Some(TestField(0)),
+        );
+        assert!(db.put::<TestSchema1>(&TestField(1), &TestField(1)).is_err());
+    }
+}
 
-// #[test]
-// fn test_open_as_secondary() {
-//     let tmpdir = tempfile::tempdir().unwrap();
-//     let tmpdir_sec = tempfile::tempdir().unwrap();
+#[test]
+fn test_open_as_secondary() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let tmpdir_sec = tempfile::tempdir().unwrap();
 
-//     let db = open_db(&tmpdir);
-//     db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
+    let db = open_db(&tmpdir);
+    db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
 
-//     let db_sec = open_db_as_secondary(&tmpdir, &tmpdir_sec);
-//     assert_eq!(
-//         db_sec.get::<TestSchema1>(&TestField(0)).unwrap(),
-//         Some(TestField(0)),
-//     );
-// }
+    let db_sec = open_db_as_secondary(&tmpdir, &tmpdir_sec);
+    assert_eq!(
+        db_sec.get::<TestSchema1>(&TestField(0)).unwrap(),
+        Some(TestField(0)),
+    );
+}
 
-// #[test]
-// fn test_report_size() {
-//     let db = TestDB::new();
+#[test]
+fn test_report_size() {
+    let db = TestDB::new();
 
-//     for i in 0..1000 {
-//         let mut db_batch = SchemaBatch::new();
-//         db_batch
-//             .put::<TestSchema1>(&TestField(i), &TestField(i))
-//             .unwrap();
-//         db_batch
-//             .put::<TestSchema2>(&TestField(i), &TestField(i))
-//             .unwrap();
-//         db.write_schemas(db_batch).unwrap();
-//     }
+    for i in 0..1000 {
+        let mut db_batch = SchemaBatch::new();
+        db_batch
+            .put::<TestSchema1>(&TestField(i), &TestField(i))
+            .unwrap();
+        db_batch
+            .put::<TestSchema2>(&TestField(i), &TestField(i))
+            .unwrap();
+        db.write_schemas(db_batch).unwrap();
+    }
 
-//     db.flush_cf("TestCF1").unwrap();
-//     db.flush_cf("TestCF2").unwrap();
+    db.flush_cf("TestCF1").unwrap();
+    db.flush_cf("TestCF2").unwrap();
 
-//     assert!(
-//         db.get_property("TestCF1", "rocksdb.estimate-live-data-size")
-//             .unwrap()
-//             > 0
-//     );
-//     assert!(
-//         db.get_property("TestCF2", "rocksdb.estimate-live-data-size")
-//             .unwrap()
-//             > 0
-//     );
-//     assert_eq!(
-//         db.get_property("default", "rocksdb.estimate-live-data-size")
-//             .unwrap(),
-//         0
-//     );
-// }
+    assert!(
+        db.get_property("TestCF1", "rocksdb.estimate-live-data-size")
+            .unwrap()
+            > 0
+    );
+    assert!(
+        db.get_property("TestCF2", "rocksdb.estimate-live-data-size")
+            .unwrap()
+            > 0
+    );
+    assert_eq!(
+        db.get_property("default", "rocksdb.estimate-live-data-size")
+            .unwrap(),
+        0
+    );
+}
 
-// #[test]
-// fn test_checkpoint() {
-//     let tmpdir = tempfile::tempdir().unwrap();
-//     let checkpoint_parent = tempfile::tempdir().unwrap();
-//     let checkpoint = checkpoint_parent.path().join("checkpoint");
-//     {
-//         let db = open_db(&tmpdir);
-//         db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
-//         db.create_checkpoint(&checkpoint).unwrap();
-//     }
-//     {
-//         let db = open_db(&tmpdir);
-//         assert_eq!(
-//             db.get::<TestSchema1>(&TestField(0)).unwrap(),
-//             Some(TestField(0)),
-//         );
+#[test]
+fn test_checkpoint() {
+    let tmpdir = tempfile::tempdir().unwrap();
+    let checkpoint_parent = tempfile::tempdir().unwrap();
+    let checkpoint = checkpoint_parent.path().join("checkpoint");
+    {
+        let db = open_db(&tmpdir);
+        db.put::<TestSchema1>(&TestField(0), &TestField(0)).unwrap();
+        db.create_checkpoint(&checkpoint).unwrap();
+    }
+    {
+        let db = open_db(&tmpdir);
+        assert_eq!(
+            db.get::<TestSchema1>(&TestField(0)).unwrap(),
+            Some(TestField(0)),
+        );
 
-//         let cp = open_db(&checkpoint);
-//         assert_eq!(
-//             cp.get::<TestSchema1>(&TestField(0)).unwrap(),
-//             Some(TestField(0)),
-//         );
-//         cp.put::<TestSchema1>(&TestField(1), &TestField(1)).unwrap();
-//         assert_eq!(
-//             cp.get::<TestSchema1>(&TestField(1)).unwrap(),
-//             Some(TestField(1)),
-//         );
-//         assert_eq!(db.get::<TestSchema1>(&TestField(1)).unwrap(), None);
-//     }
-// }
+        let cp = open_db(&checkpoint);
+        assert_eq!(
+            cp.get::<TestSchema1>(&TestField(0)).unwrap(),
+            Some(TestField(0)),
+        );
+        cp.put::<TestSchema1>(&TestField(1), &TestField(1)).unwrap();
+        assert_eq!(
+            cp.get::<TestSchema1>(&TestField(1)).unwrap(),
+            Some(TestField(1)),
+        );
+        assert_eq!(db.get::<TestSchema1>(&TestField(1)).unwrap(), None);
+    }
+}
