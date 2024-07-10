@@ -142,22 +142,9 @@ pub trait CommonDB: Sized {
         Ok(())
     }
 
-    /// TODO: private
-    fn iter_with_direction<S: Schema>(
-        &self,
-        opts: rocksdb::ReadOptions,
-        direction: ScanDirection,
-    ) -> anyhow::Result<SchemaIterator<S, Self>> {
-        let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
-        Ok(SchemaIterator::new(
-            self.db().raw_iterator_cf_opt(cf_handle, opts),
-            direction,
-        ))
-    }
-
     /// Returns a forward [`SchemaIterator`] on a certain schema with the default read options.
     fn iter<S: Schema>(&self) -> anyhow::Result<SchemaIterator<S, Self>> {
-        self.iter_with_direction::<S>(Default::default(), ScanDirection::Forward)
+        iter_with_direction::<S, Self>(&self, Default::default(), ScanDirection::Forward)
     }
 
     /// TODO: pub(crate)
@@ -189,7 +176,7 @@ pub trait CommonDB: Sized {
         &self,
         opts: rocksdb::ReadOptions,
     ) -> anyhow::Result<SchemaIterator<S, Self>> {
-        self.iter_with_direction::<S>(opts, ScanDirection::Forward)
+        iter_with_direction::<S, Self>(&self, opts, ScanDirection::Forward)
     }
 }
 
@@ -221,4 +208,16 @@ impl<const T: bool> WriteBatch for rocksdb::WriteBatchWithTransaction<T> {
     fn size_in_bytes(&self) -> usize {
         rocksdb::WriteBatchWithTransaction::size_in_bytes(self)
     }
+}
+
+fn iter_with_direction<S: Schema, D: CommonDB>(
+    this: &D,
+    opts: rocksdb::ReadOptions,
+    direction: ScanDirection,
+) -> anyhow::Result<SchemaIterator<S, D>> {
+    let cf_handle = this.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+    Ok(SchemaIterator::new(
+        this.db().raw_iterator_cf_opt(cf_handle, opts),
+        direction,
+    ))
 }
