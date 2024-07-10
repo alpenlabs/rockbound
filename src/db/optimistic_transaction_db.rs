@@ -11,7 +11,7 @@ use super::{CommonDB, RocksDB};
 #[allow(missing_docs)]
 impl RocksDB for rocksdb::OptimisticTransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
-    
+
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
         <rocksdb::OptimisticTransactionDB>::cf_handle(&self, name)
     }

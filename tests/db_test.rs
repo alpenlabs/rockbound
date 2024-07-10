@@ -6,7 +6,7 @@ use std::path::Path;
 use rockbound::schema::{ColumnFamilyName, Result};
 use rockbound::test::TestField;
 use rockbound::{define_schema, Schema, SchemaBatch};
-use rockbound::{DB, CommonDB};
+use rockbound::{CommonDB, DB};
 use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 use tempfile::TempDir;
 

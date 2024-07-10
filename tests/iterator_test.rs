@@ -9,7 +9,8 @@ use rockbound::cache::cache_db::CacheDb;
 use rockbound::schema::{KeyDecoder, KeyEncoder, ValueCodec};
 use rockbound::test::{KeyPrefix1, KeyPrefix2, TestCompositeField, TestField};
 use rockbound::{
-    define_schema, CommonDB, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaIterator, SeekKeyEncoder, DB
+    define_schema, CommonDB, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaIterator,
+    SeekKeyEncoder, DB,
 };
 use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 use tempfile::TempDir;

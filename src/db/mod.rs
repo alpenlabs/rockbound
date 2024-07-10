@@ -15,7 +15,10 @@ use crate::metrics::{
     SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS, SCHEMADB_PUT_BYTES,
 };
 use crate::schema::{KeyCodec, ValueCodec};
-use crate::{default_write_options, is_range_bounds_inverse, Operation, Schema, SchemaBatch, SchemaIterator, SchemaKey};
+use crate::{
+    default_write_options, is_range_bounds_inverse, Operation, Schema, SchemaBatch, SchemaIterator,
+    SchemaKey,
+};
 
 use super::iterator::{RawDbIter, ScanDirection};
 
@@ -149,10 +152,7 @@ pub trait CommonDB: Sized {
 
     /// TODO: pub(crate)
     ///  Returns a [`RawDbIter`] which allows to iterate over raw values in specified [`ScanDirection`].
-    fn raw_iter<S: Schema>(
-        &self,
-        direction: ScanDirection,
-    ) -> anyhow::Result<RawDbIter<Self::DB>> {
+    fn raw_iter<S: Schema>(&self, direction: ScanDirection) -> anyhow::Result<RawDbIter<Self::DB>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.db(), cf_handle, .., direction))
     }

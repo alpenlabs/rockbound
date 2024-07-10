@@ -8,7 +8,8 @@ use crate::cache::SnapshotId;
 use crate::iterator::ScanDirection;
 use crate::schema::KeyDecoder;
 use crate::{
-    CommonDB, KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue, SeekKeyEncoder, ValueCodec
+    CommonDB, KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue,
+    SeekKeyEncoder, ValueCodec,
 };
 
 /// Cache layer that stores all writes locally and also able to access "previous" operations.

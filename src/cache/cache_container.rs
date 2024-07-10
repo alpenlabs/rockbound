@@ -6,10 +6,10 @@ use std::iter::{Peekable, Rev};
 // use crate::cache::cache_container::DataLocation::Snapshot;
 use crate::cache::change_set::ChangeSet;
 use crate::cache::SnapshotId;
-use crate::iterator::{ScanDirection, RawDbIter};
+use crate::db::CommonDB;
+use crate::iterator::{RawDbIter, ScanDirection};
 use crate::schema::{KeyCodec, ValueCodec};
 use crate::{Operation, ReadOnlyLock, Schema, SchemaKey, SchemaValue};
-use crate::db::CommonDB;
 
 /// Holds collection of [`ChangeSet`]'s associated with particular Snapshot
 /// and knows how to traverse them.
@@ -356,7 +356,7 @@ mod tests {
     use crate::iterator::ScanDirection;
     use crate::schema::{KeyDecoder, KeyEncoder, Schema, ValueCodec};
     use crate::test::TestField;
-    use crate::{define_schema, Operation, SchemaBatch, SchemaKey, SchemaValue, CommonDB, DB};
+    use crate::{define_schema, CommonDB, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
 
     const DUMMY_STATE_CF: &str = "DummyStateCF";
 

@@ -4,11 +4,10 @@ use std::marker::PhantomData;
 use anyhow::Result;
 use rocksdb::{ColumnFamily, ReadOptions};
 
+use crate::db::RocksDB;
 use crate::metrics::{SCHEMADB_ITER_BYTES, SCHEMADB_ITER_LATENCY_SECONDS};
 use crate::schema::{KeyDecoder, Schema, ValueCodec};
 use crate::{CommonDB, SchemaKey, SchemaValue};
-
-use crate::db::RocksDB;
 
 /// This defines a type that can be used to seek a [`SchemaIterator`], via
 /// interfaces like [`SchemaIterator::seek`]. Mind you, not all
@@ -34,7 +33,7 @@ pub trait SeekKeyEncoder<S: Schema + ?Sized>: Sized {
 
 /// Indicates in which direction iterator should be scanned.
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub(crate) enum ScanDirection {
+pub enum ScanDirection {
     Forward,
     Backward,
 }
@@ -184,7 +183,7 @@ where
 }
 
 /// Iterates over given column in [`rocksdb::DB`].
-pub(crate) struct RawDbIter<'a, R: RocksDB> {
+pub struct RawDbIter<'a, R: RocksDB> {
     db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R>,
     direction: ScanDirection,
     upper_bound: std::ops::Bound<SchemaKey>,
@@ -296,10 +295,10 @@ mod tests {
     use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 
     use super::*;
+    use crate::db::{CommonDB, DB};
+    use crate::define_schema;
     use crate::schema::ColumnFamilyName;
     use crate::test::TestField;
-    use crate::define_schema;
-    use crate::db::{DB, CommonDB};
 
     define_schema!(TestSchema1, TestField, TestField, "TestCF1");
 
