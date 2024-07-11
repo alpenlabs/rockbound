@@ -183,12 +183,9 @@ pub enum TransactionError<RollbackError> {
     ErrorKind(rocksdb::ErrorKind),
 }
 
-impl<T> Into<anyhow::Error> for TransactionError<T>
-where
-    T: Into<anyhow::Error>,
-{
-    fn into(self) -> anyhow::Error {
-        match self {
+impl<T: Into<anyhow::Error>> From<TransactionError<T>> for anyhow::Error {
+    fn from(value: TransactionError<T>) -> Self {
+        match value {
             TransactionError::User(err) => err.into(),
             TransactionError::MaxRetriesExceeded => {
                 anyhow::Error::msg("TransactionError: Max retries exceeded")
