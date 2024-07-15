@@ -7,9 +7,9 @@ use crate::iterator::SeekKeyEncoder;
 use crate::schema::ColumnFamilyName;
 use crate::schema::Schema;
 
-use super::{CommonDB, RocksDB};
+use super::{SchemaDBOperations, RocksDBOperations};
 
-impl RocksDB for rocksdb::DB {
+impl RocksDBOperations for rocksdb::DB {
     type WriteBatch = rocksdb::WriteBatch;
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
@@ -49,7 +49,7 @@ pub struct DB {
     db: rocksdb::DB,
 }
 
-impl CommonDB for DB {
+impl SchemaDBOperations for DB {
     type DB = rocksdb::DB;
 
     fn db(&self) -> &Self::DB {

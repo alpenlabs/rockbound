@@ -8,13 +8,13 @@ use crate::cache::SnapshotId;
 use crate::iterator::ScanDirection;
 use crate::schema::KeyDecoder;
 use crate::{
-    CommonDB, KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue,
+    SchemaDBOperations, KeyCodec, Operation, ReadOnlyLock, Schema, SchemaBatch, SchemaKey, SchemaValue,
     SeekKeyEncoder, ValueCodec,
 };
 
 /// Cache layer that stores all writes locally and also able to access "previous" operations.
 #[derive(Debug)]
-pub struct CacheDb<DB: CommonDB> {
+pub struct CacheDb<DB: SchemaDBOperations> {
     local_cache: Mutex<ChangeSet>,
     db: ReadOnlyLock<CacheContainer<DB>>,
 }
@@ -29,7 +29,7 @@ pub struct PaginatedResponse<S: Schema> {
     pub next: Option<S::Key>,
 }
 
-impl<DB: CommonDB> CacheDb<DB> {
+impl<DB: SchemaDBOperations> CacheDb<DB> {
     /// Create new [`CacheDb`] pointing to given [`CacheContainer`]
     pub fn new(id: SnapshotId, cache_container: ReadOnlyLock<CacheContainer<DB>>) -> Self {
         Self {
@@ -307,7 +307,7 @@ where
     }
 }
 
-impl<DB: CommonDB> From<CacheDb<DB>> for ChangeSet {
+impl<DB: SchemaDBOperations> From<CacheDb<DB>> for ChangeSet {
     fn from(value: CacheDb<DB>) -> Self {
         value
             .local_cache

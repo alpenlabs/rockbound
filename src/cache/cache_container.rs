@@ -5,7 +5,7 @@ use std::iter::{Peekable, Rev};
 
 use crate::cache::change_set::ChangeSet;
 use crate::cache::SnapshotId;
-use crate::db::CommonDB;
+use crate::db::SchemaDBOperations;
 use crate::iterator::{RawDbIter, ScanDirection};
 use crate::schema::{KeyCodec, ValueCodec};
 use crate::{Operation, ReadOnlyLock, Schema, SchemaKey, SchemaValue};
@@ -16,7 +16,7 @@ use crate::{Operation, ReadOnlyLock, Schema, SchemaKey, SchemaValue};
 /// Should be managed carefully, because discrepancy between `snapshots` and `to_parent` leads to panic
 /// Ideally owner of writable reference to parent nad owner of cache container manages both correctly.
 #[derive(Debug)]
-pub struct CacheContainer<DB: CommonDB> {
+pub struct CacheContainer<DB: SchemaDBOperations> {
     db: DB,
     /// Set of [`ChangeSet`]s of data per individual database per snapshot
     snapshots: HashMap<SnapshotId, ChangeSet>,
@@ -25,7 +25,7 @@ pub struct CacheContainer<DB: CommonDB> {
     to_parent: ReadOnlyLock<HashMap<SnapshotId, SnapshotId>>,
 }
 
-impl<DB: CommonDB> CacheContainer<DB> {
+impl<DB: SchemaDBOperations> CacheContainer<DB> {
     /// Create CacheContainer pointing go given DB and Snapshot ID relations
     pub fn new(db: DB, to_parent: ReadOnlyLock<HashMap<SnapshotId, SnapshotId>>) -> Self {
         Self {
@@ -225,7 +225,7 @@ impl<DB: CommonDB> CacheContainer<DB> {
 
 /// [`Iterator`] over keys in given [`Schema`] in all snapshots in reverse
 /// lexicographical order.
-pub(crate) struct CacheContainerIter<'a, SnapshotIter, D: CommonDB>
+pub(crate) struct CacheContainerIter<'a, SnapshotIter, D: SchemaDBOperations>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
@@ -235,7 +235,7 @@ where
     direction: ScanDirection,
 }
 
-impl<'a, SnapshotIter, D: CommonDB> CacheContainerIter<'a, SnapshotIter, D>
+impl<'a, SnapshotIter, D: SchemaDBOperations> CacheContainerIter<'a, SnapshotIter, D>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
@@ -266,7 +266,7 @@ enum DataLocation {
 
 use DataLocation::Snapshot;
 
-impl<'a, SnapshotIter, DB: CommonDB> Iterator for CacheContainerIter<'a, SnapshotIter, DB>
+impl<'a, SnapshotIter, DB: SchemaDBOperations> Iterator for CacheContainerIter<'a, SnapshotIter, DB>
 where
     SnapshotIter: Iterator<Item = (&'a SchemaKey, &'a Operation)>,
 {
@@ -355,7 +355,7 @@ mod tests {
     use crate::iterator::ScanDirection;
     use crate::schema::{KeyDecoder, KeyEncoder, Schema, ValueCodec};
     use crate::test::TestField;
-    use crate::{define_schema, CommonDB, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
+    use crate::{define_schema, SchemaDBOperations, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
 
     const DUMMY_STATE_CF: &str = "DummyStateCF";
 

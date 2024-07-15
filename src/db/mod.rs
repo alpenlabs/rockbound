@@ -22,7 +22,7 @@ use crate::{
 
 use super::iterator::{RawDbIter, ScanDirection};
 
-pub trait RocksDB: rocksdb::DBAccess + Sized {
+pub trait RocksDBOperations: rocksdb::DBAccess + Sized {
     type WriteBatch: WriteBatch;
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily>;
@@ -45,9 +45,9 @@ pub trait RocksDB: rocksdb::DBAccess + Sized {
 }
 
 /// Common implemnentation for schematized RocksDB wrapper
-pub trait CommonDB: Sized {
+pub trait SchemaDBOperations: Sized {
     /// RocksDB: rocksdb::DB | rocksdb::OptimisticTransactionDB | rocksdb::TransactionDB
-    type DB: RocksDB;
+    type DB: RocksDBOperations;
 
     /// Get reference to rocksdb
     fn db(&self) -> &Self::DB;
@@ -112,7 +112,7 @@ pub trait CommonDB: Sized {
         let _timer = SCHEMADB_BATCH_COMMIT_LATENCY_SECONDS
             .with_label_values(&[self.name()])
             .start_timer();
-        let mut db_batch = <<Self as CommonDB>::DB as RocksDB>::WriteBatch::default();
+        let mut db_batch = <<Self as SchemaDBOperations>::DB as RocksDBOperations>::WriteBatch::default();
         for (cf_name, rows) in batch.last_writes.iter() {
             let cf_handle = self.get_cf_handle(cf_name)?;
             for (key, operation) in rows {
@@ -212,7 +212,7 @@ impl<const T: bool> WriteBatch for rocksdb::WriteBatchWithTransaction<T> {
     }
 }
 
-fn iter_with_direction<S: Schema, D: CommonDB>(
+fn iter_with_direction<S: Schema, D: SchemaDBOperations>(
     this: &D,
     opts: rocksdb::ReadOptions,
     direction: ScanDirection,

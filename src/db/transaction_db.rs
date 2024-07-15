@@ -3,9 +3,9 @@ use std::path::Path;
 use tracing::info;
 
 use super::transaction::{TransactionCtx, TransactionError};
-use super::{CommonDB, RocksDB};
+use super::{SchemaDBOperations, RocksDBOperations};
 
-impl RocksDB for rocksdb::TransactionDB {
+impl RocksDBOperations for rocksdb::TransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
@@ -44,7 +44,7 @@ pub struct TransactionDB {
     db: rocksdb::TransactionDB,
 }
 
-impl CommonDB for TransactionDB {
+impl SchemaDBOperations for TransactionDB {
     type DB = rocksdb::TransactionDB;
 
     fn db(&self) -> &Self::DB {

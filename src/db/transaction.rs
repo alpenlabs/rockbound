@@ -1,7 +1,7 @@
-use crate::{metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS}, schema::{KeyCodec, ValueCodec}, CommonDB, OptimisticTransactionDB, Schema, TransactionDB};
+use crate::{metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS}, schema::{KeyCodec, ValueCodec}, SchemaDBOperations, OptimisticTransactionDB, Schema, TransactionDB};
 
 
-pub trait TransactionDBMarker: CommonDB {}
+pub trait TransactionDBMarker: SchemaDBOperations {}
 impl TransactionDBMarker for TransactionDB {}
 impl TransactionDBMarker for OptimisticTransactionDB {}
 

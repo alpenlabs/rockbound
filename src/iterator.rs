@@ -4,10 +4,10 @@ use std::marker::PhantomData;
 use anyhow::Result;
 use rocksdb::{ColumnFamily, ReadOptions};
 
-use crate::db::RocksDB;
+use crate::db::RocksDBOperations;
 use crate::metrics::{SCHEMADB_ITER_BYTES, SCHEMADB_ITER_LATENCY_SECONDS};
 use crate::schema::{KeyDecoder, Schema, ValueCodec};
-use crate::{CommonDB, SchemaKey, SchemaValue};
+use crate::{SchemaDBOperations, SchemaKey, SchemaValue};
 
 /// This defines a type that can be used to seek a [`SchemaIterator`], via
 /// interfaces like [`SchemaIterator::seek`]. Mind you, not all
@@ -40,7 +40,7 @@ pub enum ScanDirection {
 
 /// DB Iterator parameterized on [`Schema`] that seeks with [`Schema::Key`] and yields
 /// [`Schema::Key`] and [`Schema::Value`] pairs.
-pub struct SchemaIterator<'a, S, D: CommonDB> {
+pub struct SchemaIterator<'a, S, D: SchemaDBOperations> {
     db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D::DB>,
     direction: ScanDirection,
     phantom: PhantomData<S>,
@@ -49,7 +49,7 @@ pub struct SchemaIterator<'a, S, D: CommonDB> {
 impl<'a, S, D> SchemaIterator<'a, S, D>
 where
     S: Schema,
-    D: CommonDB,
+    D: SchemaDBOperations,
 {
     pub(crate) fn new(
         db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, D::DB>,
@@ -164,7 +164,7 @@ impl<K, V> IteratorOutput<K, V> {
 impl<'a, S, D> Iterator for SchemaIterator<'a, S, D>
 where
     S: Schema,
-    D: CommonDB,
+    D: SchemaDBOperations,
 {
     type Item = Result<IteratorOutput<S::Key, S::Value>>;
 
@@ -176,18 +176,18 @@ where
 impl<'a, S, D> FusedIterator for SchemaIterator<'a, S, D>
 where
     S: Schema,
-    D: CommonDB,
+    D: SchemaDBOperations,
 {
 }
 
 /// Iterates over given column in [`rocksdb::DB`].
-pub struct RawDbIter<'a, R: RocksDB> {
+pub struct RawDbIter<'a, R: RocksDBOperations> {
     db_iter: rocksdb::DBRawIteratorWithThreadMode<'a, R>,
     direction: ScanDirection,
     upper_bound: std::ops::Bound<SchemaKey>,
 }
 
-impl<'a, R: RocksDB> RawDbIter<'a, R> {
+impl<'a, R: RocksDBOperations> RawDbIter<'a, R> {
     pub(crate) fn new(
         inner: &'a R,
         cf_handle: &ColumnFamily,
@@ -249,7 +249,7 @@ impl<'a, R: RocksDB> RawDbIter<'a, R> {
     }
 }
 
-impl<'a, R: RocksDB> Iterator for RawDbIter<'a, R> {
+impl<'a, R: RocksDBOperations> Iterator for RawDbIter<'a, R> {
     type Item = (SchemaKey, SchemaValue);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -293,7 +293,7 @@ mod tests {
     use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 
     use super::*;
-    use crate::db::{CommonDB, DB};
+    use crate::db::{SchemaDBOperations, DB};
     use crate::define_schema;
     use crate::schema::ColumnFamilyName;
     use crate::test::TestField;
@@ -333,7 +333,7 @@ mod tests {
             assert_eq!(0, count_backward);
         }
 
-        fn collect_actual_values(iter: RawDbIter<<DB as CommonDB>::DB>) -> Vec<(u32, u32)> {
+        fn collect_actual_values(iter: RawDbIter<<DB as SchemaDBOperations>::DB>) -> Vec<(u32, u32)> {
             iter.map(|(key, value)| {
                 let key = <<S as Schema>::Key as KeyDecoder<S>>::decode_key(&key).unwrap();
                 let value = <<S as Schema>::Value as ValueCodec<S>>::decode_value(&value).unwrap();

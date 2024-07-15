@@ -4,9 +4,9 @@ use anyhow::format_err;
 use tracing::info;
 
 use super::transaction::{TransactionCtx, TransactionError};
-use super::{CommonDB, RocksDB};
+use super::{SchemaDBOperations, RocksDBOperations};
 
-impl RocksDB for rocksdb::OptimisticTransactionDB {
+impl RocksDBOperations for rocksdb::OptimisticTransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
 
     fn cf_handle(&self, name: &str) -> Option<&rocksdb::ColumnFamily> {
@@ -46,7 +46,7 @@ pub struct OptimisticTransactionDB {
     db: rocksdb::OptimisticTransactionDB,
 }
 
-impl CommonDB for OptimisticTransactionDB {
+impl SchemaDBOperations for OptimisticTransactionDB {
     type DB = rocksdb::OptimisticTransactionDB;
 
     fn db(&self) -> &Self::DB {

@@ -9,7 +9,7 @@ use rockbound::cache::cache_db::CacheDb;
 use rockbound::schema::{KeyDecoder, KeyEncoder, ValueCodec};
 use rockbound::test::{KeyPrefix1, KeyPrefix2, TestCompositeField, TestField};
 use rockbound::{
-    define_schema, CommonDB, Operation, OptimisticTransactionDB, ReadOnlyLock, Schema, SchemaBatch,
+    define_schema, SchemaDBOperations, Operation, OptimisticTransactionDB, ReadOnlyLock, Schema, SchemaBatch,
     SchemaIterator, SeekKeyEncoder, TransactionDB, DB,
 };
 use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
@@ -19,7 +19,7 @@ define_schema!(TestSchema, TestCompositeField, TestField, "TestCF");
 
 type S = TestSchema;
 
-fn collect_values<DB: CommonDB>(iter: SchemaIterator<S, DB>) -> Vec<u32> {
+fn collect_values<DB: SchemaDBOperations>(iter: SchemaIterator<S, DB>) -> Vec<u32> {
     iter.map(|row| row.unwrap().value.0).collect()
 }
 
