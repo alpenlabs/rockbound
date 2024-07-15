@@ -5,7 +5,7 @@ use std::iter::{Peekable, Rev};
 
 use crate::cache::change_set::ChangeSet;
 use crate::cache::SnapshotId;
-use crate::db::SchemaDBOperations;
+use crate::db::{SchemaDBOperations, SchemaDBOperationsExt, SchemaDBOperationsExtCrate};
 use crate::iterator::{RawDbIter, ScanDirection};
 use crate::schema::{KeyCodec, ValueCodec};
 use crate::{Operation, ReadOnlyLock, Schema, SchemaKey, SchemaValue};
@@ -355,7 +355,8 @@ mod tests {
     use crate::iterator::ScanDirection;
     use crate::schema::{KeyDecoder, KeyEncoder, Schema, ValueCodec};
     use crate::test::TestField;
-    use crate::{define_schema, SchemaDBOperations, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
+    use crate::{define_schema, Operation, SchemaBatch, SchemaKey, SchemaValue, DB};
+    use crate::db::SchemaDBOperationsExt;
 
     const DUMMY_STATE_CF: &str = "DummyStateCF";
 

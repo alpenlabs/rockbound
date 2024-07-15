@@ -38,7 +38,7 @@ pub use crate::schema_batch::SchemaBatch;
 mod db;
 
 pub use db::{
-    SchemaDBOperations, OptimisticTransactionDB, TransactionDB, TransactionError,
+    SchemaDBOperations, SchemaDBOperationsExt, OptimisticTransactionDB, TransactionDB, TransactionError,
     TransactionRetry, DB,
 };
 

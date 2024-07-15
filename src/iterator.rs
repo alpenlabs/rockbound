@@ -4,10 +4,10 @@ use std::marker::PhantomData;
 use anyhow::Result;
 use rocksdb::{ColumnFamily, ReadOptions};
 
-use crate::db::RocksDBOperations;
+use crate::db::{RocksDBOperations, SchemaDBOperations};
 use crate::metrics::{SCHEMADB_ITER_BYTES, SCHEMADB_ITER_LATENCY_SECONDS};
 use crate::schema::{KeyDecoder, Schema, ValueCodec};
-use crate::{SchemaDBOperations, SchemaKey, SchemaValue};
+use crate::{SchemaKey, SchemaValue};
 
 /// This defines a type that can be used to seek a [`SchemaIterator`], via
 /// interfaces like [`SchemaIterator::seek`]. Mind you, not all
@@ -293,7 +293,7 @@ mod tests {
     use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 
     use super::*;
-    use crate::db::{SchemaDBOperations, DB};
+    use crate::db::{SchemaDBOperations, SchemaDBOperationsExt, SchemaDBOperationsExtCrate, DB};
     use crate::define_schema;
     use crate::schema::ColumnFamilyName;
     use crate::test::TestField;
@@ -333,7 +333,9 @@ mod tests {
             assert_eq!(0, count_backward);
         }
 
-        fn collect_actual_values(iter: RawDbIter<<DB as SchemaDBOperations>::DB>) -> Vec<(u32, u32)> {
+        fn collect_actual_values(
+            iter: RawDbIter<<DB as SchemaDBOperations>::DB>,
+        ) -> Vec<(u32, u32)> {
             iter.map(|(key, value)| {
                 let key = <<S as Schema>::Key as KeyDecoder<S>>::decode_key(&key).unwrap();
                 let value = <<S as Schema>::Value as ValueCodec<S>>::decode_value(&value).unwrap();

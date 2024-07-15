@@ -3,7 +3,7 @@ use std::path::Path;
 use tracing::info;
 
 use super::transaction::{TransactionCtx, TransactionError};
-use super::{SchemaDBOperations, RocksDBOperations};
+use super::{RocksDBOperations, SchemaDBOperations};
 
 impl RocksDBOperations for rocksdb::TransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
@@ -137,6 +137,8 @@ impl TransactionDB {
 mod tests {
     use super::*;
 
+    use super::super::SchemaDBOperationsExt;
+
     use crate::{define_schema, test::TestField, Schema};
 
     define_schema!(TestSchema1, TestField, TestField, "TestCF1");
@@ -179,7 +181,10 @@ mod tests {
             Err::<(), _>(anyhow::Error::msg("rollback"))
         });
 
-        assert!(matches!(txn_res, Err(TransactionError::<anyhow::Error>::Rollback(_))));
+        assert!(matches!(
+            txn_res,
+            Err(TransactionError::<anyhow::Error>::Rollback(_))
+        ));
 
         let read_value = db.get::<TestSchema1>(&TestField(1));
 

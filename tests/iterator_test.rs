@@ -9,8 +9,8 @@ use rockbound::cache::cache_db::CacheDb;
 use rockbound::schema::{KeyDecoder, KeyEncoder, ValueCodec};
 use rockbound::test::{KeyPrefix1, KeyPrefix2, TestCompositeField, TestField};
 use rockbound::{
-    define_schema, SchemaDBOperations, Operation, OptimisticTransactionDB, ReadOnlyLock, Schema, SchemaBatch,
-    SchemaIterator, SeekKeyEncoder, TransactionDB, DB,
+    define_schema, Operation, OptimisticTransactionDB, ReadOnlyLock, Schema, SchemaBatch,
+    SchemaDBOperations, SchemaDBOperationsExt, SchemaIterator, SeekKeyEncoder, TransactionDB, DB,
 };
 use rocksdb::DEFAULT_COLUMN_FAMILY_NAME;
 use tempfile::TempDir;

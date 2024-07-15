@@ -1,10 +1,12 @@
-use crate::{metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS}, schema::{KeyCodec, ValueCodec}, SchemaDBOperations, OptimisticTransactionDB, Schema, TransactionDB};
+use crate::metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS};
+use crate::schema::{KeyCodec, ValueCodec};
+use crate::Schema;
 
+use super::{OptimisticTransactionDB, SchemaDBOperations, SchemaDBOperationsExt, TransactionDB};
 
 pub trait TransactionDBMarker: SchemaDBOperations {}
 impl TransactionDBMarker for TransactionDB {}
 impl TransactionDBMarker for OptimisticTransactionDB {}
-
 
 /// operations inside transaction
 pub struct TransactionCtx<'db, DB: TransactionDBMarker> {
@@ -67,7 +69,6 @@ impl<'db, DB: TransactionDBMarker> TransactionCtx<'db, DB> {
         Ok(())
     }
 }
-
 
 /// error return for transaction
 #[derive(Debug, PartialEq)]

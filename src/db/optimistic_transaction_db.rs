@@ -4,7 +4,7 @@ use anyhow::format_err;
 use tracing::info;
 
 use super::transaction::{TransactionCtx, TransactionError};
-use super::{SchemaDBOperations, RocksDBOperations};
+use super::{RocksDBOperations, SchemaDBOperations, SchemaDBOperationsExt};
 
 impl RocksDBOperations for rocksdb::OptimisticTransactionDB {
     type WriteBatch = rocksdb::WriteBatchWithTransaction<true>;
@@ -217,7 +217,10 @@ mod tests {
             Err::<(), _>(anyhow::Error::msg("rollback"))
         });
 
-        assert!(matches!(txn_res, Err(TransactionError::<anyhow::Error>::Rollback(_))));
+        assert!(matches!(
+            txn_res,
+            Err(TransactionError::<anyhow::Error>::Rollback(_))
+        ));
 
         let read_value = db.get::<TestSchema1>(&TestField(1));
 

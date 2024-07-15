@@ -44,7 +44,7 @@ pub trait RocksDBOperations: rocksdb::DBAccess + Sized {
     ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self>;
 }
 
-/// Common implemnentation for schematized RocksDB wrapper
+/// Common implementation for schematized RocksDB wrapper
 pub trait SchemaDBOperations: Sized {
     /// RocksDB: rocksdb::DB | rocksdb::OptimisticTransactionDB | rocksdb::TransactionDB
     type DB: RocksDBOperations;
@@ -52,9 +52,12 @@ pub trait SchemaDBOperations: Sized {
     /// Get reference to rocksdb
     fn db(&self) -> &Self::DB;
 
-    /// Db name
+    /// Db name for logging
     fn name(&self) -> &str;
+}
 
+/// common operations for SchemaDB
+pub trait SchemaDBOperationsExt: SchemaDBOperations {
     /// (internal) Get ColumnFamily handle for `cf_name``
     fn get_cf_handle(&self, cf_name: &str) -> anyhow::Result<&rocksdb::ColumnFamily> {
         self.db().cf_handle(cf_name).ok_or_else(|| {
@@ -153,14 +156,24 @@ pub trait SchemaDBOperations: Sized {
         iter_with_direction::<S, Self>(&self, Default::default(), ScanDirection::Forward)
     }
 
-    /// TODO: pub(crate)
+    /// Returns a forward [`SchemaIterator`] on a certain schema with the provided read options.
+    fn iter_with_opts<S: Schema>(
+        &self,
+        opts: rocksdb::ReadOptions,
+    ) -> anyhow::Result<SchemaIterator<S, Self>> {
+        iter_with_direction::<S, Self>(&self, opts, ScanDirection::Forward)
+    }
+}
+
+impl<T: SchemaDBOperations> SchemaDBOperationsExt for T {}
+
+pub(crate) trait SchemaDBOperationsExtCrate: SchemaDBOperationsExt {
     ///  Returns a [`RawDbIter`] which allows to iterate over raw values in specified [`ScanDirection`].
     fn raw_iter<S: Schema>(&self, direction: ScanDirection) -> anyhow::Result<RawDbIter<Self::DB>> {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.db(), cf_handle, .., direction))
     }
 
-    /// TODO: pub(crate)
     /// Get a [`RawDbIter`] in given range and direction.
     fn raw_iter_range<S: Schema>(
         &self,
@@ -173,15 +186,9 @@ pub trait SchemaDBOperations: Sized {
         let cf_handle = self.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
         Ok(RawDbIter::new(&self.db(), cf_handle, range, direction))
     }
-
-    /// Returns a forward [`SchemaIterator`] on a certain schema with the provided read options.
-    fn iter_with_opts<S: Schema>(
-        &self,
-        opts: rocksdb::ReadOptions,
-    ) -> anyhow::Result<SchemaIterator<S, Self>> {
-        iter_with_direction::<S, Self>(&self, opts, ScanDirection::Forward)
-    }
 }
+
+impl<T: SchemaDBOperationsExt> SchemaDBOperationsExtCrate for T {}
 
 pub trait WriteBatch: Default {
     fn put_cf<K, V>(&mut self, cf: &impl rocksdb::AsColumnFamilyRef, key: K, value: V)

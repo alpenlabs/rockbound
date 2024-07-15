@@ -7,7 +7,7 @@ use crate::iterator::SeekKeyEncoder;
 use crate::schema::ColumnFamilyName;
 use crate::schema::Schema;
 
-use super::{SchemaDBOperations, RocksDBOperations};
+use super::{RocksDBOperations, SchemaDBOperations, SchemaDBOperationsExt};
 
 impl RocksDBOperations for rocksdb::DB {
     type WriteBatch = rocksdb::WriteBatch;
