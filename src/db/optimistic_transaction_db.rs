@@ -3,9 +3,7 @@ use std::path::Path;
 use anyhow::format_err;
 use tracing::info;
 
-use crate::metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS};
-use crate::schema::{KeyCodec, Schema, ValueCodec};
-
+use super::transaction::{TransactionCtx, TransactionError};
 use super::{CommonDB, RocksDB};
 
 impl RocksDB for rocksdb::OptimisticTransactionDB {
@@ -126,13 +124,13 @@ impl OptimisticTransactionDB {
     }
 
     /// takes a closure with transaction code and retries as required
-    pub fn with_optimistic_txn<Fn, Ret, RErr>(
+    pub fn with_optimistic_txn<Fn, Ret, RErr: Into<anyhow::Error>>(
         &self,
         retry: TransactionRetry,
         mut cb: Fn,
     ) -> Result<Ret, TransactionError<RErr>>
     where
-        Fn: FnMut(&TransactionCtx) -> Result<Ret, RErr>,
+        Fn: FnMut(&TransactionCtx<Self>) -> Result<Ret, RErr>,
     {
         let mut tries = match retry {
             TransactionRetry::Never => 1,
@@ -148,7 +146,7 @@ impl OptimisticTransactionDB {
             };
             let ret = match cb(&ctx) {
                 Ok(ret_val) => ret_val,
-                Err(err) => return Err(TransactionError::User(err)),
+                Err(err) => return Err(TransactionError::Rollback(err)),
             };
 
             if let Err(err) = txn.commit() {
@@ -173,98 +171,58 @@ pub enum TransactionRetry {
     Count(u16),
 }
 
-/// error return for transaction
-pub enum TransactionError<RollbackError> {
-    /// custom error specified on call
-    User(RollbackError),
-    /// max retries exceeded
-    MaxRetriesExceeded,
-    /// other rocksdb related error
-    ErrorKind(rocksdb::ErrorKind),
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl<T: Into<anyhow::Error>> From<TransactionError<T>> for anyhow::Error {
-    fn from(value: TransactionError<T>) -> Self {
-        match value {
-            TransactionError::User(err) => err.into(),
-            TransactionError::MaxRetriesExceeded => {
-                anyhow::Error::msg("TransactionError: Max retries exceeded")
-            }
-            TransactionError::ErrorKind(error_kind) => anyhow::Error::msg(match error_kind {
-                rocksdb::ErrorKind::NotFound => "NotFound",
-                rocksdb::ErrorKind::Corruption => "Corruption",
-                rocksdb::ErrorKind::NotSupported => "Not implemented",
-                rocksdb::ErrorKind::InvalidArgument => "Invalid argument",
-                rocksdb::ErrorKind::IOError => "IO error",
-                rocksdb::ErrorKind::MergeInProgress => "Merge in progress",
-                rocksdb::ErrorKind::Incomplete => "Result incomplete",
-                rocksdb::ErrorKind::ShutdownInProgress => "Shutdown in progress",
-                rocksdb::ErrorKind::TimedOut => "Operation timed out",
-                rocksdb::ErrorKind::Aborted => "Operation aborted",
-                rocksdb::ErrorKind::Busy => "Resource busy",
-                rocksdb::ErrorKind::Expired => "Operation expired",
-                rocksdb::ErrorKind::TryAgain => "Operation failed. Try again.",
-                rocksdb::ErrorKind::CompactionTooLarge => "Compaction too large",
-                rocksdb::ErrorKind::ColumnFamilyDropped => "Column family dropped",
-                rocksdb::ErrorKind::Unknown => "Unknown",
-            }),
-        }
-    }
-}
+    use crate::{define_schema, test::TestField, Schema};
 
-/// operations inside transaction
-pub struct TransactionCtx<'db> {
-    txn: &'db rocksdb::Transaction<'db, rocksdb::OptimisticTransactionDB>,
-    db: &'db OptimisticTransactionDB,
-}
+    define_schema!(TestSchema1, TestField, TestField, "TestCF1");
 
-impl<'db> TransactionCtx<'db> {
-    /// Reads single record by key.
-    pub fn get<S: Schema>(
-        &self,
-        schema_key: &impl KeyCodec<S>,
-    ) -> anyhow::Result<Option<S::Value>> {
-        let _timer = SCHEMADB_GET_LATENCY_SECONDS
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .start_timer();
+    fn open_db() -> OptimisticTransactionDB {
+        let tmpdir = tempfile::tempdir().unwrap();
 
-        let k = schema_key.encode_key()?;
-        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+        let column_families = vec!["default", TestSchema1::COLUMN_FAMILY_NAME];
+        let mut db_opts = rocksdb::Options::default();
+        db_opts.create_if_missing(true);
+        db_opts.create_missing_column_families(true);
 
-        let result = self.txn.get_pinned_cf(cf_handle, k)?;
-        SCHEMADB_GET_BYTES
-            .with_label_values(&[S::COLUMN_FAMILY_NAME])
-            .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));
-
-        result
-            .map(|raw_value| <S::Value as ValueCodec<S>>::decode_value(&raw_value))
-            .transpose()
-            .map_err(|err| err.into())
+        OptimisticTransactionDB::open(&tmpdir, "test", column_families, &db_opts).unwrap()
     }
 
-    /// Writes single record.
-    pub fn put<S: Schema>(
-        &self,
-        key: &impl KeyCodec<S>,
-        value: &impl ValueCodec<S>,
-    ) -> anyhow::Result<()> {
-        // Not necessary to use a batch, but we'd like a central place to bump counters.
-        // Used in tests only anyway.
-        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
-        self.txn
-            .put_cf(cf_handle, key.encode_key()?, value.encode_value()?)?;
+    #[test]
+    fn test_transaction_commit() {
+        let db = open_db();
 
-        Ok(())
+        let txn_res = db.with_optimistic_txn(TransactionRetry::Never, |ctx| {
+            ctx.put::<TestSchema1>(&TestField(1), &TestField(1))?;
+
+            Ok::<_, anyhow::Error>(())
+        });
+
+        assert!(txn_res.is_ok());
+
+        let read_value = db.get::<TestSchema1>(&TestField(1));
+
+        assert!(matches!(read_value, Ok(Some(TestField(1)))));
     }
 
-    /// Delete a single key from the database.
-    pub fn delete<S: Schema>(&self, key: &impl KeyCodec<S>) -> anyhow::Result<()> {
-        // Not necessary to use a batch, but we'd like a central place to bump counters.
-        // Used in tests only anyway.
-        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+    #[test]
+    fn test_transaction_revert() {
+        let db = open_db();
 
-        self.txn.delete_cf(cf_handle, key.encode_key()?)?;
+        let txn_res = db.with_optimistic_txn(TransactionRetry::Never, |ctx| {
+            ctx.put::<TestSchema1>(&TestField(1), &TestField(1))?;
 
-        Ok(())
+            Err::<(), _>(anyhow::Error::msg("rollback"))
+        });
+
+        assert!(matches!(txn_res, Err(TransactionError::<anyhow::Error>::Rollback(_))));
+
+        let read_value = db.get::<TestSchema1>(&TestField(1));
+
+        assert!(matches!(read_value, Ok(None)));
     }
+
+    // TODO: test retry
 }

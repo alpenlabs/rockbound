@@ -1,11 +1,11 @@
 mod db;
 mod optimistic_transaction_db;
+mod transaction;
 mod transaction_db;
 
 pub use db::DB;
-pub use optimistic_transaction_db::{
-    OptimisticTransactionDB, TransactionCtx, TransactionError, TransactionRetry,
-};
+pub use optimistic_transaction_db::{OptimisticTransactionDB, TransactionRetry};
+pub use transaction::TransactionError;
 pub use transaction_db::TransactionDB;
 
 use anyhow::format_err;
@@ -44,7 +44,7 @@ pub trait RocksDB: rocksdb::DBAccess + Sized {
     ) -> rocksdb::DBRawIteratorWithThreadMode<'b, Self>;
 }
 
-/// Common implemnentation for RocksDB
+/// Common implemnentation for schematized RocksDB wrapper
 pub trait CommonDB: Sized {
     /// RocksDB: rocksdb::DB | rocksdb::OptimisticTransactionDB | rocksdb::TransactionDB
     type DB: RocksDB;
