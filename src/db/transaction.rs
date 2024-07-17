@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 use crate::metrics::{SCHEMADB_GET_BYTES, SCHEMADB_GET_LATENCY_SECONDS};
 use crate::schema::{KeyCodec, ValueCodec};
 use crate::Schema;
@@ -71,41 +73,15 @@ impl<'db, DB: TransactionDBMarker> TransactionCtx<'db, DB> {
 }
 
 /// error return for transaction
-#[derive(Debug, PartialEq)]
-pub enum TransactionError<Reason: Into<anyhow::Error>> {
+#[derive(Debug, Error, PartialEq)]
+pub enum TransactionError<Reason> {
     /// custom error specified on call
+    #[error("Rollback; reason: {0}")]
     Rollback(Reason),
     /// max retries exceeded
+    #[error("max retries exceeded")]
     MaxRetriesExceeded,
     /// other rocksdb related error
+    #[error("rocksdb::ErrorKind: {0:?}")]
     ErrorKind(rocksdb::ErrorKind),
-}
-
-impl<T: Into<anyhow::Error>> From<TransactionError<T>> for anyhow::Error {
-    fn from(value: TransactionError<T>) -> Self {
-        match value {
-            TransactionError::Rollback(err) => err.into(),
-            TransactionError::MaxRetriesExceeded => {
-                anyhow::Error::msg("TransactionError: Max retries exceeded")
-            }
-            TransactionError::ErrorKind(error_kind) => anyhow::Error::msg(match error_kind {
-                rocksdb::ErrorKind::NotFound => "NotFound",
-                rocksdb::ErrorKind::Corruption => "Corruption",
-                rocksdb::ErrorKind::NotSupported => "Not implemented",
-                rocksdb::ErrorKind::InvalidArgument => "Invalid argument",
-                rocksdb::ErrorKind::IOError => "IO error",
-                rocksdb::ErrorKind::MergeInProgress => "Merge in progress",
-                rocksdb::ErrorKind::Incomplete => "Result incomplete",
-                rocksdb::ErrorKind::ShutdownInProgress => "Shutdown in progress",
-                rocksdb::ErrorKind::TimedOut => "Operation timed out",
-                rocksdb::ErrorKind::Aborted => "Operation aborted",
-                rocksdb::ErrorKind::Busy => "Resource busy",
-                rocksdb::ErrorKind::Expired => "Operation expired",
-                rocksdb::ErrorKind::TryAgain => "Operation failed. Try again.",
-                rocksdb::ErrorKind::CompactionTooLarge => "Compaction too large",
-                rocksdb::ErrorKind::ColumnFamilyDropped => "Column family dropped",
-                rocksdb::ErrorKind::Unknown => "Unknown",
-            }),
-        }
-    }
 }
