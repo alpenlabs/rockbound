@@ -255,23 +255,23 @@ mod tests {
 
         db.write_schemas(batch).unwrap();
 
-        let first_item = get_first::<TestSchema1, _>(&db);
-        let last_item = get_last::<TestSchema1, _>(&db);
+        let first_item = get_first::<TestSchema1>(&db);
+        let last_item = get_last::<TestSchema1>(&db);
 
-        matches!(first_item, Ok(Some((TestField(0), TestField(99)))));
-        matches!(last_item, Ok(Some((TestField(4), TestField(95)))));
+        assert!(matches!(first_item, Ok(Some((TestField(0), TestField(99))))));
+        assert!(matches!(last_item, Ok(Some((TestField(4), TestField(95))))));
 
         let (txn_first_item, txn_last_item) = db
             .with_optimistic_txn(TransactionRetry::Never, |txn| {
                 Ok::<_, anyhow::Error>((
-                    get_first::<TestSchema1, _>(txn),
-                    get_last::<TestSchema1, _>(txn),
+                    get_first::<TestSchema1>(txn),
+                    get_last::<TestSchema1>(txn),
                 ))
             })
             .unwrap();
 
-        matches!(txn_first_item, Ok(Some((TestField(0), TestField(99)))));
-        matches!(txn_last_item, Ok(Some((TestField(4), TestField(95)))));
+        assert!(matches!(txn_first_item, Ok(Some((TestField(0), TestField(99))))));
+        assert!(matches!(txn_last_item, Ok(Some((TestField(4), TestField(95))))));
     }
     // TODO: test retry
 }

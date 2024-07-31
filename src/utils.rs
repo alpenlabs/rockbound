@@ -2,10 +2,9 @@
 use crate::{Schema, SchemaDBOperationsExt};
 
 /// Get last last entry in schema, sorted lexically by keys
-pub fn get_last<S, DB>(db: &DB) -> anyhow::Result<Option<(S::Key, S::Value)>>
+pub fn get_last<S>(db: &impl SchemaDBOperationsExt) -> anyhow::Result<Option<(S::Key, S::Value)>>
 where
-    S: Schema,
-    DB: SchemaDBOperationsExt,
+    S: Schema
 {
     let mut iterator = db.iter::<S>()?;
     iterator.seek_to_last();
@@ -19,10 +18,9 @@ where
 }
 
 /// Get first stored entry in schema, sorted lexically by keys
-pub fn get_first<S, DB>(db: &DB) -> anyhow::Result<Option<(S::Key, S::Value)>>
+pub fn get_first<S>(db: &impl SchemaDBOperationsExt) -> anyhow::Result<Option<(S::Key, S::Value)>>
 where
-    S: Schema,
-    DB: SchemaDBOperationsExt,
+    S: Schema
 {
     let mut iterator = db.iter::<S>()?;
     match iterator.next() {
