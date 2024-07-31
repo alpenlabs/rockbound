@@ -175,7 +175,12 @@ pub enum TransactionRetry {
 mod tests {
     use super::*;
 
-    use crate::{define_schema, test::TestField, Schema};
+    use crate::{
+        define_schema,
+        test::TestField,
+        utils::{get_first, get_last},
+        Schema,
+    };
 
     define_schema!(TestSchema1, TestField, TestField, "TestCF1");
 
@@ -227,5 +232,46 @@ mod tests {
         assert!(matches!(read_value, Ok(None)));
     }
 
+    #[test]
+    fn test_transacton_ctx_iter() {
+        let db = open_db();
+
+        let mut batch = crate::SchemaBatch::new();
+        batch
+            .put::<TestSchema1>(&TestField(3), &TestField(96))
+            .unwrap();
+        batch
+            .put::<TestSchema1>(&TestField(0), &TestField(99))
+            .unwrap();
+        batch
+            .put::<TestSchema1>(&TestField(4), &TestField(95))
+            .unwrap();
+        batch
+            .put::<TestSchema1>(&TestField(1), &TestField(98))
+            .unwrap();
+        batch
+            .put::<TestSchema1>(&TestField(2), &TestField(97))
+            .unwrap();
+
+        db.write_schemas(batch).unwrap();
+
+        let first_item = get_first::<TestSchema1, _>(&db);
+        let last_item = get_last::<TestSchema1, _>(&db);
+
+        matches!(first_item, Ok(Some((TestField(0), TestField(99)))));
+        matches!(last_item, Ok(Some((TestField(4), TestField(95)))));
+
+        let (txn_first_item, txn_last_item) = db
+            .with_optimistic_txn(TransactionRetry::Never, |txn| {
+                Ok::<_, anyhow::Error>((
+                    get_first::<TestSchema1, _>(txn),
+                    get_last::<TestSchema1, _>(txn),
+                ))
+            })
+            .unwrap();
+
+        matches!(txn_first_item, Ok(Some((TestField(0), TestField(99)))));
+        matches!(txn_last_item, Ok(Some((TestField(4), TestField(95)))));
+    }
     // TODO: test retry
 }

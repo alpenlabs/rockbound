@@ -72,6 +72,18 @@ impl<'db, DB: TransactionDBMarker> TransactionCtx<'db, DB> {
     }
 }
 
+impl<'db, DB: TransactionDBMarker> SchemaDBOperations for TransactionCtx<'db, DB> {
+    type DB = DB::DB;
+
+    fn db(&self) -> &Self::DB {
+        self.db.db()
+    }
+
+    fn name(&self) -> &str {
+        self.db.name()
+    }
+}
+
 /// error return for transaction
 #[derive(Debug, Error, PartialEq)]
 pub enum TransactionError<Reason> {

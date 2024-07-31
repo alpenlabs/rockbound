@@ -19,6 +19,7 @@ mod iterator;
 mod metrics;
 pub mod schema;
 mod schema_batch;
+pub mod utils;
 
 #[cfg(feature = "test-utils")]
 pub mod test;
@@ -38,8 +39,8 @@ pub use crate::schema_batch::SchemaBatch;
 mod db;
 
 pub use db::{
-    SchemaDBOperations, SchemaDBOperationsExt, OptimisticTransactionDB, TransactionDB, TransactionError,
-    TransactionRetry, DB,
+    OptimisticTransactionDB, SchemaDBOperations, SchemaDBOperationsExt, TransactionDB,
+    TransactionError, TransactionRetry, DB,
 };
 
 /// Readability alias for a key in the DB.
