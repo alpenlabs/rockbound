@@ -21,7 +21,7 @@ prometheus = { version = "0.13" }
 proptest = { version = "1", optional = true }
 proptest-derive = { version = "0.4", optional = true }
 # https://github.com/rust-rocksdb/rust-rocksdb/issues/881
-rocksdb = { default-features = false, git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1cf906dc4087f06631820f13855e6b27bd21b972" }
+rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1cf906dc4087f06631820f13855e6b27bd21b972" }
 thiserror = "1"
 tracing = "0.1"
 
