@@ -39,8 +39,8 @@ pub use crate::schema_batch::SchemaBatch;
 mod db;
 
 pub use db::{
-    OptimisticTransactionDB, SchemaDBOperations, SchemaDBOperationsExt, TransactionDB,
-    TransactionError, TransactionRetry, DB,
+    OptimisticTransactionDB, SchemaDBOperations, SchemaDBOperationsExt, TransactionCtx,
+    TransactionDB, TransactionDBMarker, TransactionError, TransactionRetry, DB,
 };
 
 /// Readability alias for a key in the DB.

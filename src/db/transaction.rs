@@ -6,6 +6,7 @@ use crate::Schema;
 
 use super::{OptimisticTransactionDB, SchemaDBOperations, SchemaDBOperationsExt, TransactionDB};
 
+/// Database types with transaction
 pub trait TransactionDBMarker: SchemaDBOperations {}
 impl TransactionDBMarker for TransactionDB {}
 impl TransactionDBMarker for OptimisticTransactionDB {}
@@ -35,6 +36,29 @@ impl<'db, DB: TransactionDBMarker> TransactionCtx<'db, DB> {
         let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
 
         let result = self.txn.get_pinned_cf(cf_handle, k)?;
+        SCHEMADB_GET_BYTES
+            .with_label_values(&[S::COLUMN_FAMILY_NAME])
+            .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));
+
+        result
+            .map(|raw_value| <S::Value as ValueCodec<S>>::decode_value(&raw_value))
+            .transpose()
+            .map_err(|err| err.into())
+    }
+
+    /// Reads a single key and marks it in transaction
+    pub fn get_for_update<S: Schema>(
+        &self,
+        schema_key: &impl KeyCodec<S>,
+    ) -> anyhow::Result<Option<S::Value>> {
+        let _timer = SCHEMADB_GET_LATENCY_SECONDS
+            .with_label_values(&[S::COLUMN_FAMILY_NAME])
+            .start_timer();
+
+        let k = schema_key.encode_key()?;
+        let cf_handle = self.db.get_cf_handle(S::COLUMN_FAMILY_NAME)?;
+
+        let result = self.txn.get_pinned_for_update_cf(cf_handle, k, true)?;
         SCHEMADB_GET_BYTES
             .with_label_values(&[S::COLUMN_FAMILY_NAME])
             .observe(result.as_ref().map_or(0.0, |v| v.len() as f64));

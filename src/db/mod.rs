@@ -5,7 +5,7 @@ mod transaction_db;
 
 pub use db::DB;
 pub use optimistic_transaction_db::{OptimisticTransactionDB, TransactionRetry};
-pub use transaction::TransactionError;
+pub use transaction::{TransactionError, TransactionCtx, TransactionDBMarker};
 pub use transaction_db::TransactionDB;
 
 use anyhow::format_err;
